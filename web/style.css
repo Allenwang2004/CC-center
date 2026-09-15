@@ -1,0 +1,1486 @@
+/*
+ * cc-center
+ *
+ * Two voices. The machine speaks in mono: commit hashes, paths, +215 -11,
+ * clocks, session ids, and the app's own labels, because a logbook is
+ * machine-printed. You speak in sans: notes, journal entries, and the
+ * questions you typed. Nothing mixes the two.
+ *
+ * Colour carries meaning and nothing else. The shell is grey from end to end,
+ * so the three saturated hues -- landed, removed, waiting -- can never be
+ * mistaken for decoration.
+ */
+
+:root {
+  color-scheme: light;
+
+  --paper:   #efefec;
+  --raised:  #fbfbfa;
+  --sunk:    #e7e7e3;
+  --rule:    #dededa;
+  --rule-firm: #c8c8c2;
+
+  --ink:     #1c1c1a;
+  --ink-2:   #5c5c57;
+  --ink-3:   #8a8a83;
+
+  --landed:  #1f7a4c;
+  --removed: #b03a2e;
+  --waiting: #a9691a;
+  --waiting-wash: #f6ecdc;
+
+  --focus:   #2f5ea8;
+
+  /* Spend calendar: one hue, four steps, validated light->dark on this paper. */
+  --spend-1: #6fb98f;
+  --spend-2: #45a06c;
+  --spend-3: #28844e;
+  --spend-4: #155a37;
+
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+          "PingFang TC", "Noto Sans TC", Helvetica, Arial, sans-serif;
+
+  --sidebar: 340px;
+  --margin-col: 58px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --paper:   #17191a;
+    --raised:  #1e2123;
+    --sunk:    #121415;
+    --rule:    #2c3033;
+    --rule-firm: #3d4347;
+
+    --ink:     #e9eae7;
+    --ink-2:   #a9ada8;
+    --ink-3:   #747975;
+
+    --landed:  #55b183;
+    --removed: #e07a68;
+    --waiting: #d5a253;
+    --waiting-wash: #2b2418;
+
+    --focus:   #79a6e6;
+
+    --spend-1: #245a3d;
+    --spend-2: #2f7f55;
+    --spend-3: #3fa46e;
+    --spend-4: #6fcf99;
+  }
+}
+
+* { box-sizing: border-box; }
+
+/* A component that gives itself a display value must still obey [hidden]. */
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--paper);
+  color: var(--ink);
+  font: 13px/1.5 var(--mono);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+/* -- sign-in ------------------------------------------------------------- */
+
+/*
+ * The whole page until the server is signed in. One card on the paper, the
+ * machine's voice (mono) for the chrome and the account's voice (sans) for
+ * what you type -- the same split the rest of the tool keeps.
+ */
+.signin {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+}
+.signin-card {
+  width: min(380px, 100%);
+  padding: 26px 26px 20px;
+  background: var(--raised);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+}
+.signin-card h1 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: lowercase;
+}
+.signin-lead {
+  margin: 0 0 18px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.signin-field {
+  display: grid;
+  gap: 5px;
+  margin: 0 0 12px;
+  font-size: 11px;
+  color: var(--ink-2);
+}
+.signin-field input {
+  width: 100%;
+  font: 14px/1.4 var(--sans);
+  padding: 7px 10px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule-firm);
+  border-radius: 6px;
+}
+.signin-field input:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
+#signin-code { font-family: var(--mono); font-size: 18px; letter-spacing: 0.24em; }
+.signin-card .btn.block { margin-top: 4px; padding: 8px 12px; font-size: 12px; }
+.signin-card .btn:disabled { opacity: 0.5; cursor: progress; }
+.signin-card .linkish { display: block; margin: 12px auto 0; }
+.signin-sent {
+  margin: 0 0 14px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+.signin-error {
+  margin: 14px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--removed);
+}
+.signin-project { margin: 16px 0 0; text-align: center; }
+.signin-unconfigured p { margin: 0 0 10px; font-size: 12px; line-height: 1.55; color: var(--ink-2); }
+.signin-unconfigured pre {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  font-size: 11px;
+  background: var(--sunk);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+/* -- shell --------------------------------------------------------------- */
+
+.shell {
+  display: grid;
+  grid-template-columns: var(--sidebar) 1px 1fr;
+  height: 100%;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 18px 16px 20px;
+  background: var(--sunk);
+  border-right: 1px solid var(--rule);
+}
+
+.resizer { cursor: col-resize; background: transparent; }
+.resizer:hover { background: var(--rule-firm); }
+
+.main { overflow-y: auto; display: flex; flex-direction: column; }
+
+/* -- sidebar ------------------------------------------------------------- */
+
+.brand { margin-bottom: 22px; }
+.brand h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: lowercase;
+}
+.connection {
+  margin: 6px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ink-2);
+}
+.connection .muted { margin-left: auto; }
+
+.group { margin-bottom: 24px; }
+.group h2 {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.group h2 .chip { margin-left: auto; }
+
+.note { margin: 8px 0 0; font-size: 11px; color: var(--ink-3); line-height: 1.55; }
+.note code { font-size: 11px; }
+
+/* Everything set once and left alone moved to its own pane; this is the way there. */
+.sidebar-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 18px;
+  font-size: 11px;
+}
+.sidebar-foot .muted { margin-left: auto; color: var(--ink-3); }
+
+.chips { display: flex; gap: 4px; flex-wrap: wrap; }
+.chip {
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 9px;
+  border: 1px solid var(--rule-firm);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.chip:hover { border-color: var(--ink-3); color: var(--ink); }
+.chip.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.chip.off { border-style: dashed; color: var(--ink-3); }
+
+/*
+ * Label, value, unit -- three columns, so every field lines up down the
+ * sidebar and the numbers share one edge. The unit lives with the value it
+ * belongs to instead of being repeated in six labels ("…, seconds"), which is
+ * what pushed the longer ones onto a second line.
+ */
+.field-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px 9px;
+  align-items: center;
+  gap: 0 8px;
+  margin: 6px 0;
+  font-size: 11px;
+  color: var(--ink-2);
+}
+.field-row > span { min-width: 0; }
+.field-row input, .field-row select {
+  width: 100%;
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 6px;
+  color: var(--ink);
+  background: var(--raised);
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+}
+/* Nothing to put in the unit column, so the control takes it. */
+.field-row input:not([type="number"]),
+.field-row select { grid-column: 2 / -1; }
+.field-row input[type="number"] { font-family: var(--mono); text-align: right; }
+.field-row .unit {
+  font-family: var(--mono);
+  font-style: normal;
+  font-size: 10px;
+  color: var(--ink-3);
+}
+/* A path is the value you actually read, so give it the whole column. */
+.field-row.wide { grid-template-columns: 1fr; gap: 3px; }
+.field-row.wide input { grid-column: 1; }
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 7px 0;
+  font-size: 11px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.machines { display: grid; gap: 1px; }
+.machine-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 2px;
+  font-size: 12px;
+  border-radius: 5px;
+}
+.machine-row.off { opacity: 0.45; }
+.machine-row.dragging { background: var(--raised); }
+.machine-row .grip { cursor: grab; color: var(--ink-3); font-size: 11px; width: 9px; }
+.machine-row .grip.is-fixed { cursor: default; }
+.machine-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.machine-count { color: var(--ink-3); font-size: 11px; }
+.machine-row .linkish { opacity: 0; }
+.machine-row:hover .linkish { opacity: 1; }
+
+.add-host {
+  width: 100%;
+  margin-top: 8px;
+  font: inherit;
+  font-size: 11px;
+  padding: 4px 7px;
+  color: var(--ink);
+  background: var(--raised);
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+}
+
+/* -- top bar ------------------------------------------------------------- */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 22px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+}
+/*
+ * Both live inside .main, so the same padding keeps the tabs sitting exactly
+ * above the column -- and it survives the sidebar being dragged, which a
+ * viewport-width calculation would not.
+ */
+@media (min-width: 1500px) {
+  .topbar { padding-inline: max(22px, calc((100% - 1240px) / 2)); }
+}
+
+.tabs { display: flex; }
+.tabs button {
+  font: inherit;
+  font-size: 12px;
+  padding: 13px 13px 11px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.tabs button:hover { color: var(--ink-2); }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+
+.badge {
+  margin-left: 6px;
+  font-size: 10px;
+  color: var(--ink-3);
+}
+.tabs button[aria-selected="true"] .badge { color: var(--ink-2); }
+#count-agents:not(:empty) {
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: var(--waiting);
+  color: #fff;
+}
+
+.scope { margin-left: auto; font-size: 11px; color: var(--ink-3); }
+
+.pane { padding: 20px 22px 80px; max-width: 1080px; }
+/*
+ * Past the reading measure the column stops growing, so on a wide display it
+ * centres in what is left instead of hugging the sidebar with a dead band on
+ * the right. The measure is the point; the empty space around it is not.
+ */
+/*
+ * .main is a column flexbox, so auto side margins would stop the pane
+ * stretching and collapse it to its content. Padding centres the column
+ * without touching the box's width.
+ */
+@media (min-width: 1500px) {
+  .pane { max-width: none; padding-inline: max(22px, calc((100% - 1240px) / 2)); }
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.toolbar input[type="search"] {
+  flex: 1;
+  min-width: 220px;
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 10px;
+  color: var(--ink);
+  background: var(--raised);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+.toolbar select {
+  font: inherit;
+  font-size: 11px;
+  padding: 5px 7px;
+  color: var(--ink);
+  background: var(--raised);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+.spacer { flex: 1; }
+
+/* -- shared atoms -------------------------------------------------------- */
+
+.muted { color: var(--ink-3); font-size: 11px; }
+.plus  { color: var(--landed); }
+.minus { color: var(--removed); }
+.delta { display: inline-flex; gap: 6px; align-items: baseline; }
+
+.tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--sunk);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.tag.remote { background: transparent; border: 1px solid var(--rule-firm); }
+.tag.quiet  { background: transparent; border: 1px dashed var(--rule-firm); color: var(--ink-3); }
+.tag.gone   { background: var(--waiting-wash); color: var(--waiting); }
+.tag.now    { background: var(--ink); color: var(--paper); }
+.tag.live   { background: var(--landed); color: #fff; }
+
+.token {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 11px;
+  padding: 1px 6px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--raised);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sha {
+  font: inherit;
+  font-size: 11px;
+  padding: 1px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--landed) 14%, transparent);
+  color: var(--landed);
+  cursor: pointer;
+}
+.sha:hover { background: color-mix(in srgb, var(--landed) 26%, transparent); }
+
+.btn {
+  font: inherit;
+  font-size: 11px;
+  padding: 5px 11px;
+  border: 1px solid var(--ink);
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--paper);
+  cursor: pointer;
+}
+.btn:hover { opacity: 0.86; }
+.btn.ghost { background: transparent; color: var(--ink-2); border-color: var(--rule-firm); }
+.btn.ghost:hover { color: var(--ink); border-color: var(--ink-3); opacity: 1; }
+.btn.block { width: 100%; margin-top: 8px; }
+.btn.off { border-style: dashed; }
+/* Small enough to sit in the editor bar, solid enough to be found. */
+.btn.tiny { font-size: 10px; padding: 2px 9px; border-radius: 4px; }
+.btn.tiny.save { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+.linkish {
+  font: inherit;
+  font-size: 11px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.linkish:hover { color: var(--ink); }
+.linkish.danger:hover { color: var(--removed); }
+
+.pulse {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--rule-firm);
+}
+.pulse.ok, .pulse.on { background: var(--landed); }
+.pulse.bad { background: var(--removed); }
+.pulse.busy { background: var(--waiting); animation: breathe 1.4s ease-in-out infinite; }
+/* Could not check the machine -- not the same claim as "nothing is running". */
+.pulse.unknown { background: transparent; box-shadow: inset 0 0 0 1px var(--rule-firm); }
+@keyframes breathe { 50% { opacity: 0.35; } }
+
+.empty {
+  padding: 60px 0;
+  text-align: center;
+  color: var(--ink-3);
+}
+.empty h3 { margin: 0 0 6px; font-size: 14px; color: var(--ink-2); font-weight: 600; }
+.empty p { margin: 0; font-size: 12px; }
+
+.row-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+
+.block { margin-bottom: 30px; }
+.block > h4 {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-3);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+/* -- agents -------------------------------------------------------------- */
+
+.alert {
+  display: flex;
+  gap: 0;
+  margin-bottom: 8px;
+  background: var(--waiting-wash);
+  border: 1px solid color-mix(in srgb, var(--waiting) 35%, transparent);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.alert-mark { flex: none; width: 3px; background: var(--waiting); }
+.alert-body { padding: 12px 14px; flex: 1; min-width: 0; }
+.alert-body h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--waiting);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.alert-title {
+  margin: 5px 0 0;
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.alert-meta { display: flex; gap: 10px; margin-top: 6px; font-size: 11px; align-items: baseline; }
+
+.calm { color: var(--ink-3); }
+.calm-line { margin: 0; font-size: 12px; color: var(--ink-3); }
+
+.run {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 2px;
+  border-bottom: 1px solid var(--rule);
+}
+.run-body { flex: 1; min-width: 0; }
+.run-title {
+  margin: 0;
+  font-family: var(--sans);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.run-meta { display: flex; gap: 9px; margin-top: 3px; align-items: baseline; }
+.run .btn { opacity: 0; }
+.run:hover .btn { opacity: 1; }
+
+/*
+ * Meters. The fill reads as a status: green while there is room, the waiting
+ * amber from 60%, the removed red from 85% -- the same three hues the rest of
+ * the shell uses, meaning the same things: fine, needs you soon, about to cost
+ * you the thread. The number beside it says the same, so colour is never alone.
+ */
+/* A meter runs the full width of whatever holds it: the bar is the row. */
+.meter {
+  display: block;
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--rule);
+  overflow: hidden;
+}
+.meter-fill { display: block; height: 100%; background: var(--landed); border-radius: 4px; }
+.meter.mid .meter-fill { background: var(--waiting); }
+.meter.high .meter-fill { background: var(--removed); }
+
+.plan { display: grid; gap: 10px; }
+.plan-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 44px minmax(150px, max-content);
+  align-items: center;
+  gap: 0 12px;
+  font-size: 12px;
+}
+.plan-name { color: var(--ink-2); }
+.plan-pct { font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; }
+.plan-row.mid .plan-pct { color: var(--waiting); }
+.plan-row.high .plan-pct { color: var(--removed); }
+.plan-row.stale .plan-pct { color: var(--ink-3); font-weight: 400; }
+.plan-row.muted { grid-template-columns: 52px 1fr; }
+
+/* Same shape as a plan row, one line under the session it belongs to. */
+.ctx {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 0 12px;
+  margin-top: 7px;
+  font-size: 11px;
+}
+.ctx-pct { font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; }
+.ctx:has(.meter.mid) .ctx-pct { color: var(--waiting); }
+.ctx:has(.meter.high) .ctx-pct { color: var(--removed); }
+
+.machine-grid { display: grid; gap: 1px; }
+.machine {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 2px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--rule);
+}
+.machine.off { opacity: 0.4; }
+.machine .machine-name { flex: none; }
+.machine .muted:last-child { margin-left: auto; }
+
+/* -- projects: the logbook ----------------------------------------------- */
+
+.project { margin-bottom: 34px; }
+.project > summary { list-style: none; cursor: pointer; }
+.project > summary::-webkit-details-marker { display: none; }
+
+.project-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--rule-firm);
+  position: sticky;
+  top: 41px;
+  z-index: 5;
+  background: var(--paper);
+}
+.project-head h2 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.project-path {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 38%;
+  direction: rtl;
+  text-align: right;
+}
+
+.day { margin-top: 20px; }
+.day-head {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  margin-bottom: 10px;
+}
+.day-head h3 { margin: 0; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+
+/* what the tool worked out for itself */
+.summary {
+  margin: 10px 0 14px;
+  padding: 11px 14px;
+  background: var(--raised);
+  border: 1px solid var(--rule);
+  border-left: 2px solid var(--landed);
+  border-radius: 7px;
+}
+.summary > h4 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.fact { display: flex; gap: 10px; font-size: 11.5px; margin: 3px 0; }
+.fact-key {
+  flex: none;
+  width: 62px;
+  color: var(--ink-3);
+  font-size: 11px;
+}
+.fact-value {
+  min-width: 0;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+.fact.sub .fact-value { color: var(--ink-2); }
+.fact.open .fact-value { color: var(--waiting); }
+.commit-subject { font-family: var(--sans); }
+
+/* the ledger itself: a rule down the column, clock out in the margin */
+.ledger {
+  margin-left: var(--margin-col);
+  border-left: 1px solid var(--rule);
+}
+.entry {
+  position: relative;
+  padding: 10px 0 12px 18px;
+}
+.entry + .entry { border-top: 1px solid var(--rule); }
+.entry::before {
+  content: "";
+  position: absolute;
+  left: -3px;
+  top: 17px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--rule-firm);
+}
+.entry.landed::before { background: var(--landed); }
+.entry.loose::before { background: var(--paper); border: 1px solid var(--rule-firm); }
+
+.margin-clock {
+  position: absolute;
+  left: calc(-1 * var(--margin-col));
+  top: 11px;
+  width: calc(var(--margin-col) - 14px);
+  text-align: right;
+  font-size: 11px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.asked {
+  margin: 0 0 7px;
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.5;
+  max-width: 68ch;
+}
+.asked .tag { font-family: var(--mono); vertical-align: 2px; margin-right: 6px; }
+
+.detail { display: flex; gap: 10px; font-size: 11.5px; margin: 3px 0; }
+.detail-key {
+  flex: none;
+  width: 46px;
+  color: var(--ink-3);
+  font-size: 11px;
+  padding-top: 1px;
+}
+.detail-value {
+  min-width: 0;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+.detail.landed .detail-value { color: var(--ink-2); }
+
+/*
+ * What a turn ran. Commands are the one fact here that will not fit on its
+ * line -- a heredoc or a `find` with six flags runs off the column -- so they
+ * stack one per row and open on click instead of being cut at 72 characters
+ * with the rest left in a tooltip. Closed, the list still reads as one glance
+ * per turn; open, it is the command as it was actually run.
+ */
+.detail-value.cmds { flex-direction: column; align-items: stretch; gap: 0; }
+.cmd > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 1px 0;
+  list-style: none;
+  cursor: pointer;
+  color: var(--ink-2);
+}
+.cmd > summary::-webkit-details-marker { display: none; }
+.cmd > summary::before {
+  content: "\25B8";
+  flex: none;
+  width: 7px;
+  font-size: 8px;
+  color: var(--ink-3);
+}
+.cmd[open] > summary::before { content: "\25BE"; }
+.cmd > summary:hover { color: var(--ink); }
+.cmd > summary code {
+  min-width: 0;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The whole command, wrapped rather than scrolled: it is here to be read. */
+.cmd-full {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 3px 0 6px 13px;
+  padding: 7px 9px;
+  background: var(--sunk);
+  border-radius: 5px;
+}
+.cmd-full pre {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  /* An inline script can run to thousands of characters; it scrolls rather
+     than pushing the rest of the day off the screen. Copy still takes it whole. */
+  max-height: 44vh;
+  overflow: auto;
+}
+.cmd-full .btn { flex: none; }
+.cmd.more > summary { color: var(--ink-3); font-size: 11px; }
+.cmd.more > summary::before { content: "\002B"; font-size: 10px; }
+.cmd.more[open] > summary::before { content: "\2212"; }
+
+/* -- your half: notes and journal ---------------------------------------- */
+
+.shelf { margin: 12px 0 16px; }
+.shelf > h4 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-3);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.shelf > h4 .muted { font-weight: 400; }
+.shelf > h4 .spacer { flex: 1; }
+/* Drafting is a real wait, so the button says so rather than sitting there. */
+.shelf > h4 .linkish:disabled { cursor: progress; color: var(--waiting); }
+
+/*
+ * The editor runs the full width of the project column, so its right edge lands
+ * on the same rule as the project heading above it. What has to hold is that the
+ * text and the chrome share one width: the textarea sizes to its content, so
+ * `min-width: 100%` keeps it filling the box -- otherwise the text sits at 680px
+ * while Write/Split/Preview and the file path strand themselves at the far edge.
+ */
+
+.editor {
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+  background: var(--raised);
+  transition: border-color 0.15s ease;
+}
+.editor.is-dirty { border-color: var(--rule-firm); }
+.editor:focus-within { border-color: var(--ink-3); }
+
+/* the one place the sans face gets room to breathe */
+.writing {
+  display: block;
+  width: 100%;
+  min-width: 100%;
+  padding: 11px 13px 4px;
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  resize: vertical;
+  field-sizing: content;
+  min-height: 3.4em;
+  max-width: 72ch;
+}
+.writing:focus { outline: none; }
+.writing::placeholder { color: var(--ink-3); }
+
+.editor-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 13px 8px;
+  font-size: 10px;
+  min-height: 22px;
+}
+.editor-state { color: var(--ink-3); }
+.editor-state.dirty, .editor-state.saving { color: var(--waiting); }
+.editor-state.saved { color: var(--landed); }
+.editor-state.failed { color: var(--removed); }
+.editor-path {
+  font-size: 10px;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 46%;
+}
+.editor .linkish { opacity: 0; }
+.editor:hover .linkish, .editor:focus-within .linkish { opacity: 1; }
+
+.composer .editor { background: var(--paper); border-style: dashed; }
+.composer .editor:focus-within { background: var(--raised); border-style: solid; }
+
+/* Notes: index on the left, the open note on the right. */
+.note-pane {
+  display: grid;
+  grid-template-columns: minmax(150px, 210px) minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 8px;
+  align-items: start;
+}
+.note-index {
+  display: grid;
+  gap: 1px;
+  align-content: start;
+  max-height: 420px;
+  overflow-y: auto;
+  border-right: 1px solid var(--rule);
+  padding-right: 8px;
+}
+.note-item {
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+.note-item:hover { background: var(--raised); }
+.note-item.is-on {
+  background: var(--raised);
+  border-left-color: var(--ink-3);
+}
+.note-item-clock {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+}
+.note-item-title {
+  font-family: var(--sans);
+  font-size: 12.5px;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.note-item.is-on .note-item-title { color: var(--ink); }
+.note-item-date { font-family: var(--mono); font-size: 10px; color: var(--ink-3); }
+.note-item-new {
+  grid-template-columns: 1fr;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--rule);
+  border-radius: 0;
+  padding-bottom: 7px;
+}
+.note-item-new .note-item-title { color: var(--ink-3); font-family: var(--mono); font-size: 11px; }
+.note-item-new:hover .note-item-title,
+.note-item-new.is-on .note-item-title { color: var(--ink-2); }
+
+.note-open .editor { margin: 0; }
+/* The title is your writing too, so it stays sans -- just larger than the body. */
+.note-title-input {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  background: none;
+  padding: 2px 0 7px;
+  margin-bottom: 8px;
+  font-family: var(--sans);
+  font-size: 16px;
+  color: var(--ink);
+}
+.note-title-input:focus { outline: none; border-bottom-color: var(--ink-3); }
+.note-title-input::placeholder { color: var(--ink-3); }
+
+@media (max-width: 900px) {
+  .note-pane { grid-template-columns: 1fr; }
+  .note-index {
+    border-right: 0;
+    border-bottom: 1px solid var(--rule);
+    padding-right: 0;
+    padding-bottom: 8px;
+    max-height: 180px;
+  }
+}
+
+.journal .editor { border-left: 2px solid var(--rule-firm); }
+
+/* -- sessions ------------------------------------------------------------ */
+
+.session-group { margin: 12px 0 18px; }
+.session-group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 5px;
+  font-size: 12px;
+}
+.session-group-head .project-path { max-width: 50%; }
+
+.session { border-bottom: 1px solid var(--rule); }
+/*
+ * The ledger: one column per fact, same widths on every row, so the eye can
+ * run down "asked" or down "how long" without reading anything else. Numbers
+ * are right-aligned against their column so the digits stack.
+ */
+.session > summary {
+  display: grid;
+  grid-template-columns:
+    [clock] 88px [title] minmax(0, 1fr) [asked] 64px [files] 168px
+    [commits] 78px [dur] 52px [state] 58px [id] 66px;
+  align-items: baseline;
+  gap: 0 12px;
+  padding: 7px 2px;
+  list-style: none;
+  cursor: pointer;
+}
+.session > summary:hover { background: var(--raised); }
+.session > summary::-webkit-details-marker { display: none; }
+.session[open] > summary { border-bottom: 1px solid var(--rule); }
+
+.cell-clock { font-size: 11px; color: var(--ink-3); }
+.session-title {
+  min-width: 0;
+  font-family: var(--sans);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cell-asked, .cell-commits, .cell-dur { font-size: 11px; color: var(--ink-3); text-align: right; }
+.cell-files {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.cell-state {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: var(--ink-3);
+}
+/* A dot, not a filled pill: this repeats on every row, so it has to stay quiet. */
+.dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--rule-firm); }
+.dot.live { background: var(--landed); }
+.dot.quiet { background: transparent; box-shadow: inset 0 0 0 1px var(--rule-firm); }
+.dot.unknown { background: var(--waiting); }
+.session-id { font-size: 10px; color: var(--ink-3); text-align: right; }
+.session-body { padding: 6px 2px 14px 100px; }
+
+@media (max-width: 1180px) {
+  .session > summary { grid-template-columns: 78px minmax(0, 1fr) 58px 150px 52px 58px; }
+  .session .cell-commits, .session .session-id { display: none; }
+}
+
+.field { margin-bottom: 11px; }
+.field h5 {
+  margin: 0 0 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+.prompt-list { margin: 0; padding-left: 16px; font-family: var(--sans); font-size: 13px; }
+.prompt-list li { margin: 3px 0; max-width: 70ch; }
+.plain { margin: 0; padding-left: 16px; font-size: 12px; }
+.file-list { display: grid; gap: 2px; }
+.file-row { display: flex; gap: 10px; font-size: 11px; }
+.file-row code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tags { display: flex; gap: 4px; flex-wrap: wrap; }
+
+/* -- activity ------------------------------------------------------------ */
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 1px;
+  margin-bottom: 32px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.stat { padding: 14px 16px; background: var(--paper); }
+.stat strong {
+  display: block;
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.stat-label { display: block; margin-top: 2px; font-size: 11px; color: var(--ink-2); }
+.stat .muted { display: block; margin-top: 3px; }
+
+/*
+ * Three short lists sat one under another left the lower half of the page
+ * empty and stretched every bar to a metre long. Side by side they stay a
+ * readable length and the pane fills.
+ */
+.activity-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 4px 44px;
+  align-items: start;
+}
+
+.bars { display: grid; gap: 5px; }
+.bar-row {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr) 52px;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+}
+.bar-label {
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bar-track { height: 5px; background: var(--sunk); border-radius: 3px; overflow: hidden; }
+.bar-fill { display: block; height: 100%; background: var(--ink-3); border-radius: 3px; }
+.bar-value {
+  text-align: right;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.bar-row .muted { grid-column: 2 / -1; }
+
+/* -- spend calendar ------------------------------------------------------ */
+
+.block-head { margin: 34px 0 12px; }
+.block-head h4 { margin: 0; font-size: 11px; font-weight: 600; color: var(--ink-3); }
+
+.spend-summary { margin: 0 0 14px; font-size: 12px; }
+.spend-summary strong { font-size: 18px; font-weight: 600; margin-right: 6px; }
+.spend-cost { color: var(--landed); }
+
+/*
+ * The calendar is as wide as the pane. Columns are fractions, cells are
+ * squares of whatever a column comes to, so the grid grows with the window
+ * instead of sitting in a corner at 12px a day.
+ */
+.spend-calendar { display: grid; gap: 4px; width: 100%; }
+.spend-months {
+  display: grid;
+  gap: 3px;
+  height: 14px;
+  font-size: 10px;
+  color: var(--ink-3);
+}
+.spend-month { grid-row: 1; white-space: nowrap; }
+.spend-grid {
+  display: grid;
+  grid-template-rows: repeat(7, auto);
+  grid-auto-flow: column;
+  gap: 3px;
+  align-items: center;
+}
+.spend-day {
+  font-size: 10px;
+  color: var(--ink-3);
+  align-self: center;
+}
+.spend-cell {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: var(--rule);
+  cursor: default;
+}
+button.spend-cell { cursor: pointer; }
+button.spend-cell:hover { outline: 2px solid var(--ink-2); outline-offset: -1px; }
+.spend-cell.void { background: transparent; }
+.spend-cell.l1 { background: var(--spend-1); }
+.spend-cell.l2 { background: var(--spend-2); }
+.spend-cell.l3 { background: var(--spend-3); }
+.spend-cell.l4 { background: var(--spend-4); }
+.spend-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  margin-top: 2px;
+  font-size: 10px;
+}
+.spend-legend .spend-cell { width: 12px; height: 12px; aspect-ratio: auto; }
+.spend-legend .muted { margin: 0 4px; }
+
+.spend-detail { margin-top: 10px; min-height: 18px; }
+.spend-readout {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: baseline;
+  font-size: 11px;
+}
+.spend-readout strong { font-size: 12px; }
+.spend-readout .spend-cost { font-weight: 600; }
+
+.spend-table { margin-top: 14px; font-size: 11px; }
+.spend-table > summary { cursor: pointer; color: var(--ink-3); }
+.spend-table > summary:hover { color: var(--ink); }
+.table-scroll { overflow-x: auto; margin-top: 8px; }
+.spend-table table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.spend-table th, .spend-table td { padding: 4px 10px 4px 0; text-align: left; white-space: nowrap; }
+.spend-table th { font-weight: 600; color: var(--ink-3); border-bottom: 1px solid var(--rule); }
+.spend-table td { border-bottom: 1px solid var(--rule); }
+.spend-table .num { text-align: right; }
+.spend-table td.cost { color: var(--landed); font-weight: 600; }
+
+/* -- report -------------------------------------------------------------- */
+
+.prose { font-family: var(--sans); font-size: 14px; line-height: 1.65; max-width: 74ch; }
+.prose h1 { font-size: 20px; margin: 26px 0 10px; letter-spacing: -0.01em; }
+.prose h2 { font-size: 16px; margin: 24px 0 8px; }
+.prose h3 { font-size: 13px; margin: 18px 0 6px; color: var(--ink-2); }
+.prose p { margin: 7px 0; }
+.prose ul { margin: 6px 0; padding-left: 20px; }
+.prose li { margin: 3px 0; }
+.prose code { font-family: var(--mono); font-size: 12px; }
+.prose hr { border: 0; border-top: 1px solid var(--rule); margin: 20px 0; }
+.prose h4 { font-size: 12px; margin: 14px 0 5px; color: var(--ink-2); }
+.prose h5, .prose h6 { font-size: 11px; margin: 12px 0 4px; color: var(--ink-3); }
+.prose ol { margin: 6px 0; padding-left: 22px; }
+.prose li.task { list-style: none; margin-left: -18px; }
+.prose li.task input { margin-right: 6px; }
+.prose blockquote {
+  margin: 10px 0;
+  padding: 2px 0 2px 12px;
+  border-left: 2px solid var(--rule-firm);
+  color: var(--ink-2);
+}
+.prose pre {
+  margin: 10px 0;
+  padding: 10px 12px;
+  background: var(--sunk);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  overflow-x: auto;
+}
+.prose pre code { font-size: 12px; line-height: 1.5; }
+.prose :not(pre) > code {
+  padding: 1px 4px;
+  background: var(--sunk);
+  border-radius: 3px;
+}
+.prose table { border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+.prose th, .prose td { border: 1px solid var(--rule); padding: 5px 9px; text-align: left; }
+.prose th { background: var(--sunk); font-weight: 600; }
+.prose img { max-width: 100%; border-radius: 4px; }
+.prose a { color: var(--focus); }
+.prose del { color: var(--ink-3); }
+
+/* -- settings ------------------------------------------------------------ */
+
+/*
+ * One row per group: the name and a sentence on the left, the fields on the
+ * right. The fields reuse the sidebar's .field-row and .check exactly, so a
+ * control reads the same here as it did there -- only the room around it
+ * changed. The field column is capped at a sidebar's width for the same
+ * reason: a number box does not get better by being wider.
+ */
+.settings { max-width: 760px; }
+.setting-group {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 0 36px;
+  padding: 24px 0;
+  border-top: 1px solid var(--rule);
+}
+.setting-group:first-child { padding-top: 6px; border-top: 0; }
+.setting-group > header h2 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.setting-group > header p {
+  margin: 0 0 4px;
+  font-size: 11px;
+  color: var(--ink-3);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.setting-fields { max-width: 360px; }
+.setting-fields .field-row { margin: 8px 0 2px; }
+.setting-fields .check { margin: 12px 0 2px; }
+.setting-fields .btn { margin-top: 14px; }
+.hint {
+  margin: 0 0 6px;
+  font-size: 11px;
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+.hint code { font-size: 11px; }
+.hint.error { color: var(--removed); }
+.field-static { margin: 8px 0 2px; font-size: 12px; color: var(--ink-2); overflow-wrap: anywhere; }
+.setting-fields .btn + .btn { margin-left: 8px; }
+
+@media (max-width: 860px) {
+  .setting-group { grid-template-columns: 1fr; gap: 10px 0; }
+}
+
+/* -- markdown editing surface -------------------------------------------- */
+
+.md-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+  padding: 0 0 7px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--rule);
+}
+.md-tool {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 3px 5px;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.md-tool:hover { background: var(--sunk); color: var(--ink); }
+.md-tool:active { background: var(--rule); }
+.md-sep { width: 1px; height: 14px; margin: 0 4px; background: var(--rule); }
+.md-mode {
+  font: inherit;
+  font-size: 10px;
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.md-mode:hover { color: var(--ink-2); }
+.md-mode.is-on { background: var(--sunk); border-color: var(--rule); color: var(--ink); }
+
+.md-body { display: grid; gap: 14px; }
+.editor[data-mode="write"]   .md-preview { display: none; }
+.editor[data-mode="preview"] .writing:not(.note-title-input) { display: none; }
+.editor[data-mode="split"] .md-body { grid-template-columns: 1fr 1fr; }
+.editor[data-mode="split"] .md-preview {
+  border-left: 1px solid var(--rule);
+  padding-left: 14px;
+  overflow-y: auto;
+  max-height: 460px;
+}
+.md-preview { font-size: 13.5px; max-width: none; }
+.md-preview > :first-child { margin-top: 0; }
+
+@media (max-width: 900px) {
+  .editor[data-mode="split"] .md-body { grid-template-columns: 1fr; }
+  .editor[data-mode="split"] .md-preview {
+    border-left: 0;
+    border-top: 1px solid var(--rule);
+    padding: 12px 0 0;
+  }
+}
+
+.raw {
+  font-size: 11.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--ink-2);
+}
+
+/* -- log drawer and toast ------------------------------------------------ */
+
+.log {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  width: 380px;
+  max-height: 40vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--raised);
+  border: 1px solid var(--rule-firm);
+  border-radius: 8px;
+  box-shadow: 0 8px 30px rgb(0 0 0 / 12%);
+  z-index: 40;
+}
+.log header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--rule);
+  font-size: 11px;
+}
+.log header .linkish { margin-left: auto; }
+#log-lines { overflow-y: auto; padding: 8px 12px 12px; font-size: 11px; }
+#log-lines > div { margin: 2px 0; color: var(--ink-2); }
+#log-lines > .warn { color: var(--waiting); }
+#log-lines > .error { color: var(--removed); }
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  transform: translate(-50%, 12px);
+  padding: 8px 16px;
+  font-size: 12px;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 20px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+  z-index: 50;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* -- narrow -------------------------------------------------------------- */
+
+@media (max-width: 860px) {
+  .shell { grid-template-columns: 1fr; }
+  .sidebar, .resizer { display: none; }
+  .pane { padding: 16px 14px 60px; }
+  .ledger { margin-left: 44px; }
+  :root { --margin-col: 44px; }
+  .project-path { display: none; }
+}

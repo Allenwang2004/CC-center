@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+"""Run the report command line straight from a checkout, with nothing installed."""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
+from cccenter.cli import main  # noqa: E402
+
+if __name__ == "__main__":
+    try:
+        import signal
+        signal.signal(signal.SIGPIPE, signal.SIG_DFL)   # 讓 | head 不噴 traceback
+    except (ImportError, AttributeError, ValueError):
+        pass
+    sys.exit(main())

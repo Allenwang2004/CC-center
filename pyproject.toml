@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cc-center"
+version = "2.0.0"
+description = "What Claude Code did today, across every machine you work on — and what you have to say about it."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []                     # 標準函式庫而已, 這是刻意的
+
+[project.scripts]
+cc-center = "cccenter.cli:main"
+cc-center-app = "cccenter.app.main:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+cccenter = ["../../web/**"]
+
+[tool.pyright]
+include = ["src", "tests"]
+exclude = ["**/__pycache__", "node_modules", "web"]
+pythonVersion = "3.9"
+typeCheckingMode = "basic"
+reportMissingImports = "error"
+# 掃出來的紀錄是別人寫的 JSON: 每個欄位都可能不在, 型別也可能不是說好的那個。
+# 這裡靠的是 .get() 跟預設值, 不是靜態型別。
+reportOptionalMemberAccess = "none"
+reportOptionalSubscript = "none"
+reportArgumentType = "none"
+reportIndexIssue = "none"
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501"]

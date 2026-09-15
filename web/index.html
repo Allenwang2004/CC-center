@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cc-center</title>
+<!-- Inline, so the browser stops asking the server for /favicon.ico. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23111'/%3E%3Ccircle cx='8' cy='8' r='3' fill='%234ade80'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/style.css?v=__CC_REV__">
+<script>window.CC_TOKEN = "__CC_TOKEN__";</script>
+<script type="module" src="/static/dist/main.js?v=__CC_REV__"></script>
+</head>
+<body>
+
+<!--
+  What you wrote lives in Supabase, so the page is this form until the local
+  server is signed in. Email, then the six-digit code from the mail. The
+  browser never talks to Supabase; the server does, on this page's behalf.
+-->
+<div id="signin" class="signin" hidden>
+  <form id="signin-form" class="signin-card" autocomplete="on">
+    <h1>cc-center</h1>
+    <p class="signin-lead">Your notes and journal entries live in Supabase. Sign in with the email that owns them; a six-digit code will be sent to it.</p>
+
+    <div id="signin-unconfigured" class="signin-unconfigured" hidden>
+      <p>Supabase is not configured on this machine. Put these two in <code>.env</code> at the repository root, then restart the server:</p>
+      <pre>SUPABASE_URL=https://xxxxxxxxxxxx.supabase.co
+SUPABASE_ANON_KEY=...</pre>
+      <p>Both are under Project Settings, API, in the Supabase dashboard. The table comes from <code>supabase/schema.sql</code>, run once in the SQL Editor.</p>
+    </div>
+
+    <div id="signin-step-email" class="signin-step">
+      <label class="signin-field">
+        <span>Email</span>
+        <input type="email" id="signin-email" name="email" autocomplete="email" placeholder="you@example.com" required>
+      </label>
+      <button id="signin-send" class="btn block" type="submit">Send code</button>
+    </div>
+
+    <div id="signin-step-code" class="signin-step" hidden>
+      <p class="signin-sent">Code sent to <strong id="signin-sent-to"></strong>. Check the inbox and type it here.</p>
+      <label class="signin-field">
+        <span>Code</span>
+        <input type="text" id="signin-code" name="code" inputmode="numeric" pattern="[0-9 ]*" autocomplete="one-time-code" placeholder="123456" maxlength="12">
+      </label>
+      <button id="signin-verify" class="btn block" type="submit">Sign in</button>
+      <button id="signin-back" class="linkish" type="button">Use a different email</button>
+    </div>
+
+    <p id="signin-error" class="signin-error" role="alert" hidden></p>
+    <p id="signin-project" class="signin-project muted"></p>
+  </form>
+</div>
+
+<div class="shell" id="shell" hidden>
+  <aside class="sidebar">
+    <header class="brand">
+      <h1>cc-center</h1>
+      <p id="connection" class="connection"></p>
+    </header>
+
+    <section class="group">
+      <h2>Range</h2>
+      <div id="range" class="chips"></div>
+      <label class="field-row">
+        <span>Or one day</span>
+        <input type="date" id="date">
+      </label>
+      <label class="field-row">
+        <span>Time zone</span>
+        <input type="text" id="tz" placeholder="Asia/Taipei">
+      </label>
+    </section>
+
+    <section class="group">
+      <h2>Machines
+        <button id="remote-toggle" class="chip" type="button">Remote on</button>
+      </h2>
+      <p id="remote-note" class="note" hidden>Not reaching out. Local scanning continues.</p>
+      <div id="machines" class="machines"></div>
+      <input type="text" id="add-host" class="add-host" placeholder="Add a host, then press Enter">
+      <p class="note">Needs an alias in <code>~/.ssh/config</code> and key-based login. Drag to reorder.</p>
+    </section>
+
+    <footer class="sidebar-foot">
+      <button class="linkish" type="button" data-pane="settings">Settings</button>
+      <span id="sidebar-server" class="muted"></span>
+    </footer>
+  </aside>
+
+  <div class="resizer" id="resizer" title="Drag to resize. Double-click to reset."></div>
+
+  <main class="main">
+    <header class="topbar">
+      <nav class="tabs" id="tabs" role="tablist">
+        <button data-pane="agents" role="tab" aria-selected="true">Agents<span class="badge" id="count-agents"></span></button>
+        <button data-pane="projects" role="tab" aria-selected="false">Projects<span class="badge" id="count-projects"></span></button>
+        <button data-pane="sessions" role="tab" aria-selected="false">Sessions<span class="badge" id="count-sessions"></span></button>
+        <button data-pane="activity" role="tab" aria-selected="false">Activity</button>
+        <button data-pane="report" role="tab" aria-selected="false">Report</button>
+        <button data-pane="settings" role="tab" aria-selected="false">Settings</button>
+      </nav>
+      <span id="scope" class="scope"></span>
+      <button id="refresh" class="btn ghost" type="button" title="Collect now (R)">Collect</button>
+    </header>
+
+    <section id="pane-agents" class="pane" role="tabpanel">
+      <div id="pane-agents-body"></div>
+    </section>
+
+    <section id="pane-projects" class="pane" role="tabpanel" hidden>
+      <div class="toolbar">
+        <input type="search" id="search-projects" placeholder="Search questions, files, commits">
+        <select id="filter-project"></select>
+        <label class="check"><input type="checkbox" id="changed-projects" checked> Only what changed something</label>
+        <span class="spacer"></span>
+        <span id="projects-meta" class="muted"></span>
+      </div>
+      <div id="pane-projects-body"></div>
+    </section>
+
+    <section id="pane-sessions" class="pane" role="tabpanel" hidden>
+      <div class="toolbar">
+        <input type="search" id="search-sessions" placeholder="Search titles, questions, files, commands">
+        <select id="filter-host"></select>
+        <select id="filter-session-project"></select>
+        <label class="check"><input type="checkbox" id="changed-sessions"> Only sessions that wrote files</label>
+      </div>
+      <div id="pane-sessions-body"></div>
+    </section>
+
+    <section id="pane-activity" class="pane" role="tabpanel" hidden>
+      <div id="pane-activity-body"></div>
+    </section>
+
+    <section id="pane-report" class="pane" role="tabpanel" hidden>
+      <div class="toolbar">
+        <select id="report-view">
+          <option value="project">By project</option>
+          <option value="day">By day</option>
+        </select>
+        <button id="report-copy" class="btn ghost" type="button">Copy Markdown</button>
+        <button id="report-save" class="btn ghost" type="button">Save file</button>
+        <button id="report-raw" class="btn ghost" type="button">Toggle source</button>
+        <span class="spacer"></span>
+        <span id="report-meta" class="muted"></span>
+      </div>
+      <div id="pane-report-body"></div>
+    </section>
+    <section id="pane-settings" class="pane" role="tabpanel" hidden>
+      <div id="pane-settings-body" class="settings">
+
+        <section class="setting-group">
+          <header>
+            <h2>Collecting</h2>
+            <p>How often to look, and what counts as a session. Changes apply on the next pass, no restart.</p>
+          </header>
+          <div class="setting-fields">
+            <label class="field-row"><span>Local scan</span><input type="number" id="local_poll" min="5"><i class="unit">s</i></label>
+            <p class="hint">Checks transcript timestamps this often and rescans only if something moved. 0 turns the timer off; Collect still works.</p>
+            <label class="field-row"><span>Remote scan</span><input type="number" id="remote_poll" min="0"><i class="unit">s</i></label>
+            <p class="hint">How often to ssh out to each machine. 0 means only when you press Collect.</p>
+            <label class="field-row"><span>Busy machines</span><input type="number" id="remote_poll_hot" min="0"><i class="unit">s</i></label>
+            <p class="hint">A shorter interval for machines where a session moved recently.</p>
+            <label class="field-row"><span>Counts as working</span><input type="number" id="live_window" min="60"><i class="unit">s</i></label>
+            <p class="hint">A session quiet for longer than this leaves the Agents tab.</p>
+            <label class="check"><input type="checkbox" id="sidechains"> Include subagent transcripts</label>
+            <label class="check" title="A `claude -p` run that summarises this tool's own output is not a working session"><input type="checkbox" id="oneshot"> Count one-shot <code>claude -p</code> runs</label>
+          </div>
+        </section>
+
+        <section class="setting-group">
+          <header>
+            <h2>Telling you</h2>
+            <p>A desktop notification when a session stops and needs you. The Agents tab shows it either way.</p>
+          </header>
+          <div class="setting-fields">
+            <label class="field-row">
+              <span>Notify about</span>
+              <select id="notify_scope">
+                <option value="off">Nothing</option>
+                <option value="remote">Remote machines</option>
+                <option value="all">Everything</option>
+              </select>
+            </label>
+            <p class="hint">The local machine is usually in front of you, so remote-only is the default.</p>
+            <label class="field-row"><span>Idle before nudging</span><input type="number" id="notify_waiting_after" min="5"><i class="unit">s</i></label>
+            <p class="hint">How long after the assistant's last word before it counts as waiting for you.</p>
+            <label class="field-row"><span>Tool stalled</span><input type="number" id="notify_tool_after" min="10"><i class="unit">s</i></label>
+            <p class="hint">A file tool with no result for this long is probably waiting for permission.</p>
+            <label class="check"><input type="checkbox" id="notify_sound"> Play a sound</label>
+          </div>
+        </section>
+
+        <section class="setting-group">
+          <header>
+            <h2>Journal</h2>
+            <p>Every morning, Claude writes yesterday's entry for each project you asked something in: question by question, why, how, which commit. You add your own words afterwards; a day you have saved on is never rewritten.</p>
+          </header>
+          <div class="setting-fields">
+            <label class="check"><input type="checkbox" id="journal_auto"> Write yesterday's journal automatically</label>
+            <p id="journal-no-claude" class="hint" hidden><code>claude</code> is not on this machine's PATH, so nothing can be written until it is.</p>
+            <label class="field-row"><span>After</span><input type="text" id="journal_at" placeholder="06:00" pattern="[0-2][0-9]:[0-5][0-9]"></label>
+            <p class="hint">Local time. Not a moment but a threshold: if the machine was asleep, it catches up on the next pass, back to three days.</p>
+            <label class="field-row"><span>Model</span><input type="text" id="journal_model" placeholder="haiku"></label>
+            <p class="hint">Passed to <code>claude -p --model</code>. A day's record runs to tens of thousands of tokens, so the cheap one is the default. By hand, any day: <code>bin/cc-center-app journal --date YYYY-MM-DD</code></p>
+          </div>
+        </section>
+
+        <section class="setting-group">
+          <header>
+            <h2>Reports</h2>
+            <p>The Markdown on the Report tab, and where Save file puts it.</p>
+          </header>
+          <div class="setting-fields">
+            <label class="field-row"><span>Questions per session</span><input type="number" id="prompts" min="1" max="25"></label>
+            <label class="check"><input type="checkbox" id="tokens"> Show tokens and cost</label>
+            <p class="hint">Only in the Markdown. Sessions and Activity always show cost.</p>
+            <label class="field-row wide"><span>Export folder</span><input type="text" id="out_dir"></label>
+          </div>
+        </section>
+
+        <section class="setting-group">
+          <header>
+            <h2>Account</h2>
+            <p>Notes and journal entries are stored in Supabase under this account. This machine keeps a copy so the page loads offline; a save goes to Supabase first and fails if it cannot get there.</p>
+          </header>
+          <div class="setting-fields">
+            <p class="field-static">Signed in as <strong id="account-email"></strong></p>
+            <p id="account-sync" class="hint"></p>
+            <p id="account-error" class="hint error" hidden></p>
+            <button id="sync-now" class="btn ghost" type="button">Sync now</button>
+            <button id="sign-out" class="btn ghost" type="button">Sign out</button>
+            <p class="hint">Another machine's writing shows up here within five minutes, or right away after Sync now or Collect. Rows only this machine has are sent up on the next sync.</p>
+          </div>
+        </section>
+
+        <section class="setting-group">
+          <header>
+            <h2>Server</h2>
+            <p id="server-info"></p>
+            <p id="db-info"></p>
+          </header>
+          <div class="setting-fields">
+            <label class="field-row wide"><span>Open in browser</span><input type="text" id="browser" placeholder="System default"></label>
+            <p class="hint">An app name, like <code>Arc</code> or <code>Firefox</code>. Empty uses the system default.</p>
+            <button id="quit" class="btn ghost" type="button">Stop the server</button>
+            <p class="hint">Start on login with <code>bin/cc-center-app install</code></p>
+          </div>
+        </section>
+
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="log" id="log" hidden>
+  <header>
+    <strong>Collector</strong>
+    <button id="log-close" class="linkish" type="button">Hide</button>
+  </header>
+  <div id="log-lines"></div>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+</body>
+</html>

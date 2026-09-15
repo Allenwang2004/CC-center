@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# 從本機 + 各台遠端收集 Claude Code session, 合併成一份日誌。
+# 遠端不用裝任何東西 —— scanner.py 用 stdin 餵給對面的 python3。
+#
+#   bin/cc-center-all                      # 今天
+#   bin/cc-center-all --days 7             # 最近七天
+#   bin/cc-center-all --date 2026-09-05
+#   bin/cc-center-all --tokens             # 多印 token / 花費
+#   bin/cc-center-all -o ~/daily.md        # 存成檔案
+#   bin/cc-center-all --json | claude -p "根據這份 JSON 幫我寫今天的中文工作日誌"
+#
+# 機器清單: 設 CC_HOSTS="a b c" (環境變數, 或 repo 根目錄的 .env —— 見 .env.example),
+# 或在 ~/.cc-center-hosts 一行一台 (# 開頭是註解) —— 介面也是讀同一個檔。
+# 什麼都沒設就只收本機。
+set -uo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(dirname "$HERE")"
+CLI="$HERE/cc-center"                       # 本機: 掃描 + 合併 + 排版
+SCANNER="$ROOT/src/cccenter/scanner.py"     # 遠端: 只有這一個檔要送過去
+[[ -x $CLI ]] || { echo "找不到 $CLI" >&2; exit 1; }
+[[ -f $SCANNER ]] || { echo "找不到 $SCANNER" >&2; exit 1; }
+
+# .env: 跟 src/cccenter/env.py 同一套規則 —— KEY=value, # 註解, 可加 export, 可用引號,
+# 已經設好的環境變數永遠優先, 這裡只補沒設的。
+if [[ -f "$ROOT/.env" ]]; then
+  while IFS= read -r line || [[ -n $line ]]; do
+    line="${line#"${line%%[![:space:]]*}"}"                 # 去掉開頭空白
+    [[ -z $line || $line == \#* ]] && continue
+    line="${line#export }"
+    key="${line%%=*}"; val="${line#*=}"
+    key="${key%"${key##*[![:space:]]}"}"; val="${val#"${val%%[![:space:]]*}"}"
+    val="${val%"${val##*[![:space:]]}"}"
+    [[ $key =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+    if [[ ${#val} -ge 2 && ( $val == \"*\" || $val == \'*\' ) ]]; then
+      val="${val:1:${#val}-2}"
+    fi
+    [[ -n ${!key+x} ]] || export "$key=$val"            # 已經有就不動
+  done < "$ROOT/.env"
+fi
+
+HOSTS=()
+TZNAME="${CC_TZ:-}"                         # 空的 = 這台機器的時區
+SSH_TIMEOUT="${CC_SSH_TIMEOUT:-8}"
+
+# 機器清單: 環境變數 (含 .env) > 設定檔
+if [[ -n ${CC_HOSTS:-} ]]; then
+  read -r -a HOSTS <<< "$CC_HOSTS"
+elif [[ -f "$HOME/.cc-center-hosts" ]]; then
+  while IFS= read -r h || [[ -n $h ]]; do              # (不用 mapfile: macOS 內建的是 bash 3.2)
+    h="${h%%#*}"; h="${h//[[:space:]]/}"
+    [[ -n $h ]] && HOSTS+=("$h")
+  done < "$HOME/.cc-center-hosts"
+fi
+
+# 把輸出用的旗標 (--json / -o) 跟決定範圍的旗標分開:
+# 範圍旗標要送去每一台, 輸出旗標只在最後 merge 時用。
+WINDOW_ARGS=()
+OUTPUT_ARGS=()
+while (($#)); do
+  case $1 in
+    --json|--tokens|--sidechains|--by-project) OUTPUT_ARGS+=("$1"); shift ;;
+    --prompts|-o|--out)                        OUTPUT_ARGS+=("$1" "${2-}"); shift 2 ;;
+    *)                                         WINDOW_ARGS+=("$1"); shift ;;
+  esac
+done
+
+# 遠端可能沒裝 tzdata, 所以在本機把時區換算成固定位移再送過去。
+TZARG=$(python3 - "$TZNAME" <<'PY'
+import sys
+from datetime import datetime
+try:
+    from zoneinfo import ZoneInfo
+    off = datetime.now(ZoneInfo(sys.argv[1])).strftime("%z")
+    print(f"{off[:3]}:{off[3:]}")
+except Exception:
+    print(datetime.now().astimezone().strftime("%z")[:3] + ":00")
+PY
+)
+
+OUT=$(mktemp -d) || exit 1
+trap 'rm -rf "$OUT"' EXIT
+
+# 先在本機跑一次, 順便問出這次要收的 UTC 時間視窗, 遠端就不必自己算日期。
+if ! "$CLI" --json --host "$(hostname -s)" --tz "$TZARG" \
+       "${WINDOW_ARGS[@]+"${WINDOW_ARGS[@]}"}" > "$OUT/00-local.json"; then
+  echo "  ! 本機掃描失敗" >&2
+  rm -f "$OUT/00-local.json"
+fi
+
+SINCE=""; UNTIL=""
+if [[ -s "$OUT/00-local.json" ]]; then
+  read -r SINCE UNTIL < <(python3 -c '
+import json,sys
+w = json.load(open(sys.argv[1])).get("window") or {}
+print(w.get("since",""), w.get("until",""))' "$OUT/00-local.json")
+fi
+[[ -n $SINCE && -n $UNTIL ]] || { echo "  ! 算不出時間視窗" >&2; exit 1; }
+
+if ((${#HOSTS[@]} == 0)); then
+  echo "沒有設定遠端機器 (CC_HOSTS 或 ~/.cc-center-hosts), 只收本機" >&2
+else
+  echo "收集 ${#HOSTS[@]} 台遠端 ($SINCE ~ $UNTIL, tz ${TZNAME:-local})…" >&2
+fi
+
+# 遠端: 平行跑, 單台掛掉不影響其他台
+for h in ${HOSTS[@]+"${HOSTS[@]}"}; do          # (空陣列在 bash 3.2 + set -u 會炸)
+  (
+    if ssh -o BatchMode=yes -o ConnectTimeout="$SSH_TIMEOUT" "$h" \
+         "\$(command -v python3 || command -v python) - --json --host $(printf '%q' "$h") \
+          --tz $(printf '%q' "$TZARG") --since $(printf '%q' "$SINCE") --until $(printf '%q' "$UNTIL")" \
+         < "$SCANNER" > "$OUT/$h.json" 2>"$OUT/$h.err" && [[ -s "$OUT/$h.json" ]]; then
+      echo "  ✓ $h" >&2
+    else
+      echo "  ! $h 取不到: $(tr -d '\r' < "$OUT/$h.err" | grep -v '^$' | tail -1)" >&2
+      rm -f "$OUT/$h.json"
+    fi
+  ) &
+done
+wait
+
+shopt -s nullglob
+files=("$OUT"/*.json)
+((${#files[@]})) || { echo "所有來源都失敗了" >&2; exit 1; }
+
+"$CLI" --merge "${files[@]}" --tz "$TZNAME" \
+       "${OUTPUT_ARGS[@]+"${OUTPUT_ARGS[@]}"}"
