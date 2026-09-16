@@ -96,6 +96,32 @@ export function table(text, sel) {
         start: at, end: at + 6 };
 }
 /**
+ * A footnote is two edits at once: the `[^n]` mark where the caret is, and the
+ * `[^n]: ` line at the end of the text, where the caret then goes. `n` is one
+ * past the highest footnote already there.
+ */
+export function footnote(text, sel) {
+    let n = 0;
+    for (const m of text.matchAll(/\[\^(\d+)\]/g))
+        n = Math.max(n, Number(m[1]));
+    const id = String(n + 1);
+    const mark = `[^${id}]`;
+    const trimmed = text.slice(0, sel.start) + mark + text.slice(sel.end);
+    const gap = trimmed.endsWith("\n\n") ? "" : trimmed.endsWith("\n") ? "\n" : "\n\n";
+    const made = trimmed + `${gap}[^${id}]: `;
+    return { text: made, start: made.length, end: made.length };
+}
+/** `:::spoiler Title` around the selection; the title is what gets selected. */
+export function spoiler(text, sel) {
+    const inner = text.slice(sel.start, sel.end);
+    const atLineStart = sel.start === lineStartOf(text, sel.start);
+    const lead = atLineStart ? "" : "\n";
+    const made = `${lead}:::spoiler Title\n${inner}\n:::\n`;
+    const at = sel.start + lead.length + ":::spoiler ".length;
+    return { text: text.slice(0, sel.start) + made + text.slice(sel.end),
+        start: at, end: at + 5 };
+}
+/**
  * Enter inside a list carries the marker to the next line; Enter on an item you
  * left empty ends the list instead of laying down another dead bullet.
  */

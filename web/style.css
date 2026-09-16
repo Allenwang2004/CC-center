@@ -1379,6 +1379,52 @@ button.spend-cell:hover { outline: 2px solid var(--ink-2); outline-offset: -1px;
 .prose img { max-width: 100%; border-radius: 4px; }
 .prose a { color: var(--focus); }
 .prose del { color: var(--ink-3); }
+.prose mark { background: color-mix(in srgb, var(--waiting) 28%, transparent); color: inherit; padding: 0 2px; border-radius: 2px; }
+.prose ins { text-decoration: underline; }
+.prose sup, .prose sub { font-size: 0.75em; line-height: 0; }
+.prose .fn-ref a { text-decoration: none; padding: 0 1px; }
+.prose .footnotes { margin-top: 22px; padding-top: 10px; border-top: 1px solid var(--rule); font-size: 12.5px; color: var(--ink-2); }
+.prose .footnotes ol { padding-left: 20px; }
+.prose .fn-back { text-decoration: none; margin-left: 4px; }
+.prose .math { font-family: var(--mono); font-size: 12.5px; }
+.prose .math-block { display: block; margin: 12px 0; text-align: center; overflow-x: auto; }
+.prose .spoiler {
+  margin: 10px 0;
+  padding: 6px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--raised);
+}
+.prose .spoiler > summary { cursor: pointer; font-weight: 600; color: var(--ink-2); }
+.prose .spoiler[open] > summary { margin-bottom: 6px; }
+.prose .box {
+  margin: 10px 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--ink-3);
+  border-radius: 4px;
+  background: var(--raised);
+}
+.prose .box > :first-child { margin-top: 0; }
+.prose .box > :last-child { margin-bottom: 0; }
+.prose .box-info    { border-left-color: var(--focus);   background: color-mix(in srgb, var(--focus) 8%, transparent); }
+.prose .box-success { border-left-color: var(--landed);  background: color-mix(in srgb, var(--landed) 8%, transparent); }
+.prose .box-warning { border-left-color: var(--waiting); background: color-mix(in srgb, var(--waiting) 10%, transparent); }
+.prose .box-danger  { border-left-color: var(--removed); background: color-mix(in srgb, var(--removed) 8%, transparent); }
+.prose .toc {
+  margin: 10px 0 16px;
+  padding: 8px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--raised);
+  font-size: 13px;
+}
+.prose .toc ul { list-style: none; padding: 0; margin: 0; }
+.prose .toc li { margin: 2px 0; }
+.prose .toc a { text-decoration: none; color: var(--ink-2); }
+.prose .toc a:hover { color: var(--ink); text-decoration: underline; }
+.prose .toc .toc-h2 { padding-left: 14px; }
+.prose .toc .toc-h3 { padding-left: 28px; }
+.prose .toc .toc-h4, .prose .toc .toc-h5, .prose .toc .toc-h6 { padding-left: 42px; }
 
 /* -- settings ------------------------------------------------------------ */
 
@@ -1456,6 +1502,7 @@ button.spend-cell:hover { outline: 2px solid var(--ink-2); outline-offset: -1px;
 .md-tool:hover { background: var(--sunk); color: var(--ink); }
 .md-tool:active { background: var(--rule); }
 .md-sep { width: 1px; height: 14px; margin: 0 4px; background: var(--rule); }
+.md-modes { display: inline-flex; gap: 2px; margin-left: auto; flex: none; }
 .md-mode {
   font: inherit;
   font-size: 10px;

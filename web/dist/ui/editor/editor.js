@@ -11,7 +11,7 @@
 import { api } from "../../core/api.js";
 import { composing, h, keep } from "../dom.js";
 import { markdownToHtml } from "./markdown.js";
-import { codeBlock, continueList, heading, indent, link, prefixLines, table, wrap, } from "./syntax.js";
+import { codeBlock, continueList, footnote, heading, indent, link, prefixLines, spoiler, table, wrap, } from "./syntax.js";
 /** Every editor currently holding unsaved text, so the page can warn on unload. */
 const dirtyEditors = new Set();
 export const unsavedCount = () => dirtyEditors.size;
@@ -89,10 +89,15 @@ function build(options) {
      * toolbar doubles as the legend for what you are actually typing -- and it
      * stays in mono, where every other machine-printed label in this tool lives.
      */
-    const tools = h("div", { class: "md-tools", hidden: !options.markdown }, tool("#", "Heading 1", (t, sel) => heading(t, sel, 1)), tool("##", "Heading 2", (t, sel) => heading(t, sel, 2)), tool("###", "Heading 3", (t, sel) => heading(t, sel, 3)), h("span", { class: "md-sep" }), tool("**", "Bold  ⌘B", (t, sel) => wrap(t, sel, "**")), tool("*", "Italic  ⌘I", (t, sel) => wrap(t, sel, "*")), tool("~~", "Strikethrough", (t, sel) => wrap(t, sel, "~~")), tool("`", "Code", (t, sel) => wrap(t, sel, "`")), h("span", { class: "md-sep" }), tool("-", "Bullet list", (t, sel) => prefixLines(t, sel, "- ")), tool("1.", "Numbered list", (t, sel) => prefixLines(t, sel, "", true)), tool("- [ ]", "Task list", (t, sel) => prefixLines(t, sel, "- [ ] ")), tool(">", "Quote", (t, sel) => prefixLines(t, sel, "> ")), h("span", { class: "md-sep" }), tool("[]()", "Link  ⌘K", (t, sel) => link(t, sel)), tool("```", "Code block", (t, sel) => codeBlock(t, sel)), tool("|", "Table", (t, sel) => table(t, sel)), tool("---", "Divider", (t, sel) => ({
+    const tools = h("div", { class: "md-tools", hidden: !options.markdown }, tool("#", "Heading 1", (t, sel) => heading(t, sel, 1)), tool("##", "Heading 2", (t, sel) => heading(t, sel, 2)), tool("###", "Heading 3", (t, sel) => heading(t, sel, 3)), h("span", { class: "md-sep" }), tool("**", "Bold  ⌘B", (t, sel) => wrap(t, sel, "**")), tool("*", "Italic  ⌘I", (t, sel) => wrap(t, sel, "*")), tool("~~", "Strikethrough", (t, sel) => wrap(t, sel, "~~")), tool("==", "Highlight", (t, sel) => wrap(t, sel, "==")), tool("++", "Underline", (t, sel) => wrap(t, sel, "++")), tool("^", "Superscript", (t, sel) => wrap(t, sel, "^")), tool("~", "Subscript", (t, sel) => wrap(t, sel, "~")), tool("`", "Code", (t, sel) => wrap(t, sel, "`")), h("span", { class: "md-sep" }), tool("-", "Bullet list", (t, sel) => prefixLines(t, sel, "- ")), tool("1.", "Numbered list", (t, sel) => prefixLines(t, sel, "", true)), tool("- [ ]", "Task list", (t, sel) => prefixLines(t, sel, "- [ ] ")), tool(">", "Quote", (t, sel) => prefixLines(t, sel, "> ")), h("span", { class: "md-sep" }), tool("[]()", "Link  ⌘K", (t, sel) => link(t, sel)), tool("```", "Code block", (t, sel) => codeBlock(t, sel)), tool("|", "Table", (t, sel) => table(t, sel)), tool("---", "Divider", (t, sel) => ({
         text: t.slice(0, sel.start) + "\n---\n" + t.slice(sel.end),
         start: sel.start + 5, end: sel.start + 5,
-    })), h("span", { class: "spacer" }), modeBtn("write", "Write"), modeBtn("split", "Split"), modeBtn("preview", "Preview"));
+    })), h("span", { class: "md-sep" }), tool("$", "Math (inline $..$, block $$ on its own line)", (t, sel) => wrap(t, sel, "$")), tool("[^]", "Footnote", (t, sel) => footnote(t, sel)), tool(":::", "Fold (:::spoiler), or :::info / :::warning / :::danger / :::success", (t, sel) => spoiler(t, sel)), tool("[TOC]", "Table of contents from the headings", (t, sel) => ({
+        text: t.slice(0, sel.start) + "\n[TOC]\n" + t.slice(sel.end),
+        start: sel.start + 7, end: sel.start + 7,
+    })), h("span", { class: "spacer" }), 
+    // One group, so when the toolbar wraps the three modes wrap together.
+    h("span", { class: "md-modes" }, modeBtn("write", "Write"), modeBtn("split", "Split"), modeBtn("preview", "Preview")));
     const state = h("span", { class: "editor-state" });
     const remove = h("button", { class: "linkish danger", type: "button", hidden: isComposer || options.kind !== "note" }, "Delete");
     const path = h("code", { class: "editor-path" });

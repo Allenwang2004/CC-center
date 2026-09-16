@@ -13,8 +13,8 @@ import { api } from "../../core/api.js";
 import { composing, h, keep } from "../dom.js";
 import { markdownToHtml } from "./markdown.js";
 import {
-  codeBlock, continueList, heading, indent, link, prefixLines, table, wrap,
-  type Edit, type Sel,
+  codeBlock, continueList, footnote, heading, indent, link, prefixLines, spoiler, table,
+  wrap, type Edit, type Sel,
 } from "./syntax.js";
 
 /** "file" is a plain file on disk (a CLAUDE.md): saved through `save`, never deleted here. */
@@ -163,6 +163,10 @@ function build(options: EditorOptions): Editor {
     tool("**", "Bold  ⌘B", (t, sel) => wrap(t, sel, "**")),
     tool("*", "Italic  ⌘I", (t, sel) => wrap(t, sel, "*")),
     tool("~~", "Strikethrough", (t, sel) => wrap(t, sel, "~~")),
+    tool("==", "Highlight", (t, sel) => wrap(t, sel, "==")),
+    tool("++", "Underline", (t, sel) => wrap(t, sel, "++")),
+    tool("^", "Superscript", (t, sel) => wrap(t, sel, "^")),
+    tool("~", "Subscript", (t, sel) => wrap(t, sel, "~")),
     tool("`", "Code", (t, sel) => wrap(t, sel, "`")),
     h("span", { class: "md-sep" }),
     tool("-", "Bullet list", (t, sel) => prefixLines(t, sel, "- ")),
@@ -177,10 +181,21 @@ function build(options: EditorOptions): Editor {
       text: t.slice(0, sel.start) + "\n---\n" + t.slice(sel.end),
       start: sel.start + 5, end: sel.start + 5,
     })),
+    h("span", { class: "md-sep" }),
+    tool("$", "Math (inline $..$, block $$ on its own line)", (t, sel) => wrap(t, sel, "$")),
+    tool("[^]", "Footnote", (t, sel) => footnote(t, sel)),
+    tool(":::", "Fold (:::spoiler), or :::info / :::warning / :::danger / :::success",
+         (t, sel) => spoiler(t, sel)),
+    tool("[TOC]", "Table of contents from the headings", (t, sel) => ({
+      text: t.slice(0, sel.start) + "\n[TOC]\n" + t.slice(sel.end),
+      start: sel.start + 7, end: sel.start + 7,
+    })),
     h("span", { class: "spacer" }),
-    modeBtn("write", "Write"),
-    modeBtn("split", "Split"),
-    modeBtn("preview", "Preview"));
+    // One group, so when the toolbar wraps the three modes wrap together.
+    h("span", { class: "md-modes" },
+      modeBtn("write", "Write"),
+      modeBtn("split", "Split"),
+      modeBtn("preview", "Preview")));
 
   const state = h("span", { class: "editor-state" });
   const remove = h(

@@ -8,7 +8,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  codeBlock, continueList, heading, indent, link, prefixLines, table, wrap,
+  codeBlock, continueList, footnote, heading, indent, link, prefixLines, spoiler, table,
+  wrap,
 } from "../dist/ui/editor/syntax.js";
 
 const sel = (start, end = start) => ({ start, end });
@@ -84,4 +85,16 @@ test("indent moves list items by two spaces, and back", () => {
   const inn = indent("- a\n- b", sel(0, 7));
   assert.equal(inn.text, "  - a\n  - b");
   assert.equal(indent(inn.text, sel(0, inn.text.length), true).text, "- a\n- b");
+});
+
+test("footnote drops the mark at the caret and the definition at the end", () => {
+  const e = footnote("a[^1] b", sel(7));
+  assert.equal(e.text, "a[^1] b[^2]\n\n[^2]: ");
+  assert.equal(e.start, e.text.length);
+});
+
+test("spoiler wraps the selection and selects the title placeholder", () => {
+  const e = spoiler("secret", sel(0, 6));
+  assert.equal(e.text, ":::spoiler Title\nsecret\n:::\n");
+  assert.equal(e.text.slice(e.start, e.end), "Title");
 });
