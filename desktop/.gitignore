@@ -1,0 +1,9 @@
+node_modules/
+dist/
+build/
+.venv-build/
+src-tauri/target/
+src-tauri/binaries/
+src-tauri/gen/
+icon.png
+*.log

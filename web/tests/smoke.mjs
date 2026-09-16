@@ -46,6 +46,15 @@ globalThis.CSS = window.CSS ?? { escape: (s) => s.replace(/["\\]/g, "\\$&") };
 globalThis.getComputedStyle = window.getComputedStyle.bind(window);
 window.CC_TOKEN = "test";
 
+// CLAUDE.md files are read from disk, not from the report, so the fixture
+// is a small hand-made list: one global that exists, one project without.
+const CLAUDE_FILES = { local_host: state.local_host, files: [
+  { scope: "global", host: state.local_host, cwd: null, path: "/Users/x/.claude/CLAUDE.md",
+    exists: true, body: "# Global\n\nBe terse.\n", mtime: 1, error: null, last_active: 0 },
+  { scope: "project", host: state.local_host, cwd: "/Users/x/proj", path: "/Users/x/proj/.claude/CLAUDE.md",
+    exists: false, body: "", mtime: null, error: null, last_active: 2 },
+] };
+
 const seen = [];
 const posts = [];
 globalThis.fetch = async (url, opts) => {
@@ -54,7 +63,7 @@ globalThis.fetch = async (url, opts) => {
   const body =
     String(url).startsWith("/api/state") ? state :
     String(url).startsWith("/api/report") ? report :
-    String(url).startsWith("/api/markdown") ? "# Report\n\nSome **text**.\n\n- a bullet\n" :
+    String(url).startsWith("/api/claudemd") ? CLAUDE_FILES :
     { ok: true };
   return {
     ok: true,
@@ -131,7 +140,7 @@ const outline = (pane) => {
 
 // Walk every pane the way a person would.
 const { default: _ } = { default: null };
-for (const name of ["agents", "projects", "sessions", "activity", "report", "settings"]) {
+for (const name of ["agents", "projects", "sessions", "activity", "claude", "settings"]) {
   const btn = d.querySelector(`#tabs button[data-pane="${name}"]`);
   btn.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
   await new Promise((r) => setTimeout(r, 250));
@@ -181,13 +190,41 @@ for (const name of ["agents", "projects", "sessions", "activity", "report", "set
 }
 
 /*
+ * Claude.md: the global file opens in an editor, the project without one gets
+ * a Create button, and pressing it opens an empty editor in its place.
+ */
+{
+  const tab = d.querySelector('#tabs button[data-pane="claude"]');
+  tab.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 300));
+  const editors = d.querySelectorAll("#pane-claude-body .editor");
+  const create = d.querySelector("#pane-claude-body .claude-create button");
+  console.log("\nclaude.md files :", d.querySelectorAll("#pane-claude-body .claude-file").length,
+              "| editors", editors.length, "| create button", Boolean(create));
+  if (editors.length !== 1 || !create) errors.push("claude.md pane did not render one editor and one create button");
+  create?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 100));
+  const after = d.querySelectorAll("#pane-claude-body .editor").length;
+  console.log("after create    :", after, "editors");
+  if (after !== 2) errors.push("Create did not open an editor");
+  const area = d.querySelectorAll("#pane-claude-body .editor textarea.writing")[1];
+  area.value = "# proj\n";
+  area.dispatchEvent(new window.Event("input", { bubbles: true }));
+  area.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true }));
+  await new Promise((r) => setTimeout(r, 250));
+  const saved = posts.filter(([u]) => u.startsWith("/api/claudemd"));
+  console.log("claude.md save  :", JSON.stringify(saved));
+  if (!saved.length || saved[0][1].cwd !== "/Users/x/proj") errors.push("saving a CLAUDE.md did not POST /api/claudemd");
+}
+
+/*
  * Settings live on their own pane now, found by id rather than by where they
  * sit -- so every field has to be present and carry the server's value, and
  * the sidebar must have let go of them.
  */
-const fields = ["local_poll", "remote_poll", "remote_poll_hot", "live_window", "prompts",
-                "notify_waiting_after", "notify_tool_after", "out_dir", "browser",
-                "notify_scope", "sidechains", "oneshot", "tokens", "notify_sound"];
+const fields = ["local_poll", "remote_poll", "remote_poll_hot", "live_window",
+                "notify_waiting_after", "notify_tool_after", "browser",
+                "notify_scope", "sidechains", "oneshot", "notify_sound"];
 const filled = fields.filter((id) => {
   const el = d.getElementById(id);
   if (!el) return false;
@@ -199,7 +236,7 @@ console.log("\nsettings filled :", filled.length, "of", fields.length,
 console.log("settings in pane:", fields.every((id) => d.getElementById(id)?.closest("#pane-settings")));
 console.log("account         :", d.getElementById("account-email").textContent, "|",
             d.getElementById("account-sync").textContent);
-if (d.getElementById("account-email").textContent !== SIGNED.email) errors.push("account email not shown");
+if (d.getElementById("account-email").textContent !== state.auth.email) errors.push("account email not shown");
 console.log("sidebar groups  :", [...d.querySelectorAll(".sidebar .group h2")].map((x) => x.firstChild.textContent.trim()).join(", "));
 console.log("sidebar machines:", d.querySelectorAll("#machines .machine-row").length);
 console.log("range chips     :", [...d.querySelectorAll("#range .chip")].map((b) => b.textContent).join(" "));

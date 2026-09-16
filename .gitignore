@@ -4,8 +4,8 @@ __pycache__/
 node_modules/
 .env
 *.egg-info/
-build/
-dist/
+/build/
+/dist/
 
 # 你自己的內容 —— 存在 ~/.cc-center 跟各專案的 journal/ note/ 底下,
 # 不屬於這個 repo。web/dist/ 是刻意進版控的: 沒有它就得先 npm install 才能跑。

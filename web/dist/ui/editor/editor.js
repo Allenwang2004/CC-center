@@ -1,0 +1,305 @@
+/**
+ * The writing surface for notes and journal entries.
+ *
+ * Nothing is written until you say so. An editor that saved on a timer wrote a
+ * note out of a stray keystroke and committed half-finished sentences, so the
+ * commit is explicit: "Save now", or ⌘↩. The editor owns its own DOM and is
+ * held by `keep()`, so unsaved text survives a background refresh and survives
+ * clicking to another note and back -- and `unsaved()` lets the page warn you
+ * before the tab closes on top of it.
+ */
+import { api } from "../../core/api.js";
+import { composing, h, keep } from "../dom.js";
+import { markdownToHtml } from "./markdown.js";
+import { codeBlock, continueList, heading, indent, link, prefixLines, table, wrap, } from "./syntax.js";
+/** Every editor currently holding unsaved text, so the page can warn on unload. */
+const dirtyEditors = new Set();
+export const unsavedCount = () => dirtyEditors.size;
+export function editor(options) {
+    const el = keep(options.key, () => {
+        const made = build(options);
+        made.el.dataset.editor = options.key;
+        return made.el;
+    });
+    return el.__editor;
+}
+function build(options) {
+    const isComposer = options.kind === "note" && !options.ref;
+    let ref = options.ref;
+    let saved = options.saved;
+    let savedTitle = options.savedTitle ?? "";
+    let status = "clean";
+    let inFlight = false;
+    const area = h("textarea", {
+        class: "writing",
+        rows: options.rows,
+        placeholder: options.placeholder,
+        spellcheck: false,
+    });
+    area.value = saved;
+    const titleBox = h("input", {
+        class: "writing note-title-input",
+        type: "text",
+        placeholder: options.titlePlaceholder ?? "Title",
+        spellcheck: false,
+        hidden: !options.withTitle,
+    });
+    titleBox.value = savedTitle;
+    let mode = "write";
+    const preview = h("div", { class: "md-preview prose" });
+    const paintPreview = () => {
+        if (mode === "write")
+            return;
+        preview.innerHTML = markdownToHtml(area.value)
+            || '<p class="muted">Nothing to preview yet.</p>';
+    };
+    const apply = (fn) => {
+        const sel = { start: area.selectionStart, end: area.selectionEnd };
+        const next = fn(area.value, sel);
+        area.value = next.text;
+        area.setSelectionRange(next.start, next.end);
+        area.focus();
+        onInput();
+    };
+    const tool = (label, hint, fn) => {
+        const b = h("button", { class: "md-tool", type: "button", title: hint }, label);
+        // mousedown, not click: the textarea must keep its selection.
+        b.addEventListener("mousedown", (e) => {
+            e.preventDefault();
+            apply(fn);
+        });
+        return b;
+    };
+    const modeBtn = (m, label) => {
+        const b = h("button", { class: `md-mode${mode === m ? " is-on" : ""}`, type: "button", data: { mode: m } }, label);
+        b.addEventListener("click", () => {
+            mode = m;
+            root.dataset.mode = m;
+            for (const other of tools.querySelectorAll(".md-mode"))
+                other.classList.toggle("is-on", other.dataset.mode === m);
+            paintPreview();
+            if (m !== "preview")
+                area.focus();
+        });
+        return b;
+    };
+    /*
+     * The buttons are labelled with the syntax they insert, not with icons. These
+     * notes are markdown files that live in the project next to the code, so the
+     * toolbar doubles as the legend for what you are actually typing -- and it
+     * stays in mono, where every other machine-printed label in this tool lives.
+     */
+    const tools = h("div", { class: "md-tools", hidden: !options.markdown }, tool("#", "Heading 1", (t, sel) => heading(t, sel, 1)), tool("##", "Heading 2", (t, sel) => heading(t, sel, 2)), tool("###", "Heading 3", (t, sel) => heading(t, sel, 3)), h("span", { class: "md-sep" }), tool("**", "Bold  ⌘B", (t, sel) => wrap(t, sel, "**")), tool("*", "Italic  ⌘I", (t, sel) => wrap(t, sel, "*")), tool("~~", "Strikethrough", (t, sel) => wrap(t, sel, "~~")), tool("`", "Code", (t, sel) => wrap(t, sel, "`")), h("span", { class: "md-sep" }), tool("-", "Bullet list", (t, sel) => prefixLines(t, sel, "- ")), tool("1.", "Numbered list", (t, sel) => prefixLines(t, sel, "", true)), tool("- [ ]", "Task list", (t, sel) => prefixLines(t, sel, "- [ ] ")), tool(">", "Quote", (t, sel) => prefixLines(t, sel, "> ")), h("span", { class: "md-sep" }), tool("[]()", "Link  ⌘K", (t, sel) => link(t, sel)), tool("```", "Code block", (t, sel) => codeBlock(t, sel)), tool("|", "Table", (t, sel) => table(t, sel)), tool("---", "Divider", (t, sel) => ({
+        text: t.slice(0, sel.start) + "\n---\n" + t.slice(sel.end),
+        start: sel.start + 5, end: sel.start + 5,
+    })), h("span", { class: "spacer" }), modeBtn("write", "Write"), modeBtn("split", "Split"), modeBtn("preview", "Preview"));
+    const state = h("span", { class: "editor-state" });
+    const remove = h("button", { class: "linkish danger", type: "button", hidden: isComposer || options.kind !== "note" }, "Delete");
+    const path = h("code", { class: "editor-path" });
+    /*
+     * Autosave alone is invisible: with no control anywhere, the honest reading
+     * of this box is that there is no way to save at all. The button does not add
+     * a new way to save -- it commits the same pending edit the timer would -- it
+     * is there so the answer to "how do I save this?" is on screen.
+     */
+    const saveNow = h("button", { class: "btn tiny save", type: "button", hidden: true }, "Save now");
+    saveNow.addEventListener("click", () => void commit());
+    const bar = h("div", { class: "editor-bar" }, state, h("span", { class: "spacer" }), path, saveNow, remove);
+    const root = h("div", { class: `editor${options.markdown ? " is-markdown" : ""}`, data: { mode: "write" } }, titleBox, tools, h("div", { class: "md-body" }, area, preview), bar);
+    const dirtyNow = () => area.value !== saved || (!!options.withTitle && titleBox.value !== savedTitle);
+    function paint() {
+        const blank = isComposer || (!saved && !savedTitle);
+        state.textContent = {
+            clean: blank ? "" : "Saved",
+            dirty: "Unsaved — ⌘↩ or Save now",
+            saving: "Saving…",
+            saved: "Saved",
+            failed: "Could not save",
+        }[status];
+        state.className = `editor-state ${status}`;
+        saveNow.hidden = !(status === "dirty" || status === "failed");
+        saveNow.textContent = status === "failed" ? "Try again" : "Save now";
+        root.classList.toggle("is-dirty", status === "dirty" || status === "saving");
+        // Nothing writes on a timer any more, so the page has to know what is at risk.
+        if (status === "dirty" || status === "failed")
+            dirtyEditors.add(options.key);
+        else
+            dirtyEditors.delete(options.key);
+    }
+    async function commit() {
+        const text = area.value;
+        const title = titleBox.value;
+        if (inFlight)
+            return;
+        if (!dirtyNow()) {
+            status = "clean";
+            paint();
+            return;
+        }
+        // A composer with only a title and no body is still worth keeping.
+        if (isComposer && !text.trim() && !title.trim())
+            return;
+        inFlight = true;
+        status = "saving";
+        paint();
+        try {
+            const res = options.save
+                ? { ...(await options.save(text)), ref, title }
+                : await api.saveEntry({
+                    kind: options.kind === "file" ? "note" : options.kind,
+                    cwd: options.cwd,
+                    id: ref,
+                    host: options.host,
+                    text,
+                    ...(options.withTitle ? { title } : {}),
+                });
+            saved = text;
+            savedTitle = res.title ?? title;
+            status = "saved";
+            if (res.warn) {
+                state.textContent = res.warn;
+                status = "failed";
+            }
+            if (res.path)
+                path.textContent = res.path;
+            if (isComposer) {
+                area.value = "";
+                titleBox.value = "";
+                saved = "";
+                savedTitle = "";
+                status = "clean";
+                // The composer is not the note it just wrote -- it is the empty box for
+                // the next one, so it must not go on showing that note's file path.
+                path.textContent = "";
+                options.onCreated?.(res.ref);
+            }
+            else {
+                ref = res.ref;
+            }
+            options.onSaved?.();
+        }
+        catch (err) {
+            status = "failed";
+            state.textContent = err instanceof Error ? err.message : "Could not save";
+        }
+        finally {
+            inFlight = false;
+            paint();
+        }
+    }
+    const onInput = () => {
+        status = dirtyNow() ? "dirty" : "clean";
+        paintPreview();
+        paint();
+    };
+    area.addEventListener("input", onInput);
+    titleBox.addEventListener("input", onInput);
+    // Enter in the title line moves into the body rather than submitting anything.
+    titleBox.addEventListener("keydown", (e) => {
+        if (composing(e))
+            return;
+        if (e.key === "Enter") {
+            e.preventDefault();
+            area.focus();
+        }
+    });
+    area.addEventListener("keydown", (e) => {
+        if (composing(e))
+            return;
+        if (options.markdown) {
+            const mod = e.metaKey || e.ctrlKey;
+            const key = e.key.toLowerCase();
+            if (mod && !e.shiftKey && (key === "b" || key === "i" || key === "k")) {
+                e.preventDefault();
+                apply((t, sel) => key === "b" ? wrap(t, sel, "**")
+                    : key === "i" ? wrap(t, sel, "*")
+                        : link(t, sel));
+                return;
+            }
+            if (e.key === "Tab") {
+                e.preventDefault();
+                apply((t, sel) => indent(t, sel, e.shiftKey));
+                return;
+            }
+            if (e.key === "Enter" && !e.metaKey && !e.ctrlKey && !e.shiftKey
+                && area.selectionStart === area.selectionEnd) {
+                const next = continueList(area.value, area.selectionStart);
+                if (next) {
+                    e.preventDefault();
+                    area.value = next.text;
+                    area.setSelectionRange(next.start, next.end);
+                    onInput();
+                    return;
+                }
+            }
+        }
+        if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+            e.preventDefault();
+            void commit();
+            if (isComposer)
+                area.focus();
+            else
+                area.blur();
+        }
+        if (e.key === "Escape") {
+            area.value = saved;
+            titleBox.value = savedTitle;
+            status = "clean";
+            paint();
+            area.blur();
+        }
+    });
+    remove.addEventListener("click", async () => {
+        if (!ref)
+            return;
+        if (!confirm("Delete this note?"))
+            return;
+        try {
+            const gone = ref;
+            const res = await api.deleteNote({ cwd: options.cwd, id: ref, host: options.host });
+            if (res.warn)
+                alert(res.warn);
+            root.remove();
+            options.onDeleted?.(gone);
+        }
+        catch (err) {
+            alert(err instanceof Error ? err.message : "Could not delete");
+        }
+    });
+    paint();
+    const instance = {
+        el: root,
+        sync(savedText, incomingTitle) {
+            const title = incomingTitle ?? savedTitle;
+            if (status === "dirty" || status === "saving")
+                return;
+            if (document.activeElement === area || document.activeElement === titleBox)
+                return;
+            if (savedText === saved && title === savedTitle)
+                return;
+            saved = savedText;
+            savedTitle = title;
+            area.value = savedText;
+            titleBox.value = title;
+            status = "clean";
+            paintPreview();
+            paint();
+        },
+        focus() {
+            (options.withTitle ? titleBox : area).focus();
+        },
+        replace(text) {
+            area.value = text;
+            area.setSelectionRange(0, 0);
+            onInput();
+            area.focus();
+        },
+    };
+    root.__editor = instance;
+    return instance;
+}
+export const focusEditor = (key) => {
+    const el = document.querySelector(`[data-editor="${CSS.escape(key)}"] textarea`);
+    el?.focus();
+};
+//# sourceMappingURL=editor.js.map

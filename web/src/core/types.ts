@@ -150,7 +150,6 @@ export interface Uncommitted {
 /** What changed on one day in one project. Computed, never generated. */
 export interface DayChanges {
   day: string;
-  prompts: number;
   active: number;
   sessions: string[];
   commits: Commit[];
@@ -239,7 +238,6 @@ export interface Settings {
   disabled_hosts: string[];
   sidechains: boolean;
   oneshot: boolean;
-  tokens: boolean;
   prompts: number;
   entrypoints: string[];
   ssh_timeout: number;
@@ -249,7 +247,6 @@ export interface Settings {
   remote_poll: number;
   remote_poll_hot: number;
   live_window: number;
-  out_dir: string;
   theme: string;
   browser: string;
   notify_scope: "off" | "remote" | "all";
@@ -309,4 +306,22 @@ export interface AppState {
   report: Report;
 }
 
-export type PaneName = "agents" | "projects" | "sessions" | "activity" | "report" | "settings";
+export type PaneName = "agents" | "projects" | "sessions" | "activity" | "claude" | "settings";
+
+/**
+ * One CLAUDE.md as it sits on disk: the global one on a machine, or a
+ * project's `.claude/CLAUDE.md`. The file is the truth; nothing is cached.
+ */
+export interface ClaudeFile {
+  scope: "global" | "project";
+  host: string;
+  /** null for the global file. */
+  cwd: string | null;
+  path: string;
+  exists: boolean;
+  body: string;
+  mtime: number | null;
+  /** Why it could not be read, if it could not. */
+  error: string | null;
+  last_active: number;
+}

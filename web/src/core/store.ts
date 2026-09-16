@@ -29,9 +29,6 @@ export interface Store {
   openDays: Set<string>;
   /** Which note each project has open. "" means the blank new-note form. */
   openNote: Map<string, string>;
-  reportView: "day" | "project";
-  reportText: string;
-  showRaw: boolean;
 }
 
 export const store: Store = {
@@ -49,9 +46,6 @@ export const store: Store = {
   openProjects: new Set(),
   openDays: new Set(),
   openNote: new Map(),
-  reportView: "project",
-  reportText: "",
-  showRaw: false,
 };
 
 export function adopt(state: AppState): void {

@@ -1,0 +1,25 @@
+[package]
+name = "cc-center-desktop"
+version = "2.0.0"
+description = "cc-center as a macOS menu bar app: a Tauri shell around the Python server."
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "cc_center_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-shell = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-notification = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ureq = { version = "2", features = ["json"] }
+tokio = { version = "1", features = ["time"] }
+rand = "0.8"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }

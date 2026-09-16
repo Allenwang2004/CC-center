@@ -17,7 +17,8 @@ import {
   type Edit, type Sel,
 } from "./syntax.js";
 
-type Kind = "journal" | "note";
+/** "file" is a plain file on disk (a CLAUDE.md): saved through `save`, never deleted here. */
+type Kind = "journal" | "note" | "file";
 type Status = "clean" | "dirty" | "saving" | "saved" | "failed";
 
 /** Every editor currently holding unsaved text, so the page can warn on unload. */
@@ -46,6 +47,11 @@ export interface EditorOptions {
   onSaved?: () => void;
   /** Fired after the entry is gone, so the caller can move the selection. */
   onDeleted?: (ref: string) => void;
+  /**
+   * Where the text goes when it is not a note or a journal entry. Given this,
+   * the editor never calls the entries API; the caller owns the write.
+   */
+  save?: (text: string) => Promise<{ path?: string | null; warn?: string | null }>;
 }
 
 export interface Editor {
@@ -179,7 +185,7 @@ function build(options: EditorOptions): Editor {
   const state = h("span", { class: "editor-state" });
   const remove = h(
     "button",
-    { class: "linkish danger", type: "button", hidden: isComposer },
+    { class: "linkish danger", type: "button", hidden: isComposer || options.kind !== "note" },
     "Delete",
   );
   const path = h("code", { class: "editor-path" });
@@ -237,14 +243,16 @@ function build(options: EditorOptions): Editor {
     status = "saving";
     paint();
     try {
-      const res = await api.saveEntry({
-        kind: options.kind,
-        cwd: options.cwd,
-        id: ref,
-        host: options.host,
-        text,
-        ...(options.withTitle ? { title } : {}),
-      });
+      const res = options.save
+        ? { ...(await options.save(text)), ref, title }
+        : await api.saveEntry({
+            kind: options.kind === "file" ? "note" : options.kind,
+            cwd: options.cwd,
+            id: ref,
+            host: options.host,
+            text,
+            ...(options.withTitle ? { title } : {}),
+          });
       saved = text;
       savedTitle = res.title ?? title;
       status = "saved";

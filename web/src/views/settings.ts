@@ -9,17 +9,17 @@
  * without touching code -- it is found by id, not by position.
  */
 
-import { api } from "../core/api.js";
+import { api, inApp } from "../core/api.js";
 import { ago, plural } from "../core/format.js";
 import { store } from "../core/store.js";
 import type { Settings } from "../core/types.js";
 
 type Save = (patch: Partial<Settings>) => Promise<void>;
 
-const NUMBERS = ["local_poll", "remote_poll", "remote_poll_hot", "live_window", "prompts",
+const NUMBERS = ["local_poll", "remote_poll", "remote_poll_hot", "live_window",
                  "notify_waiting_after", "notify_tool_after"] as const;
-const TEXTS = ["out_dir", "browser", "journal_at", "journal_model"] as const;
-const FLAGS = ["sidechains", "oneshot", "tokens", "notify_sound", "journal_auto"] as const;
+const TEXTS = ["browser", "journal_at", "journal_model"] as const;
+const FLAGS = ["sidechains", "oneshot", "notify_sound", "journal_auto"] as const;
 
 export function renderSettings(): void {
   const s = store.settings;
@@ -35,11 +35,15 @@ export function renderSettings(): void {
   for (const id of FLAGS) set(id, s[id]);
   set("notify_scope", s.notify_scope);
 
-  const server = `pid ${store.serverInfo.pid} / port ${location.port} / ${store.serverInfo.cwd}`;
+  // Inside the app the page has no port of its own; the server is a sidecar.
+  const where = inApp ? "app" : `port ${location.port}`;
+  const server = `pid ${store.serverInfo.pid} / ${where} / ${store.serverInfo.cwd}`;
   const info = document.getElementById("server-info");
   if (info) info.textContent = server;
   const foot = document.getElementById("sidebar-server");
-  if (foot) foot.textContent = `port ${location.port}`;
+  if (foot) foot.textContent = where;
+  const quit = document.getElementById("quit");
+  if (quit) quit.textContent = inApp ? "Quit cc-center" : "Stop the server";
   const dbInfo = document.getElementById("db-info");
   if (dbInfo && store.report)
     dbInfo.textContent =
@@ -89,6 +93,7 @@ export function bindSettings(save: Save): void {
     void save({ notify_scope: (e.target as HTMLSelectElement).value as Settings["notify_scope"] }));
 
   document.getElementById("quit")?.addEventListener("click", () => {
-    if (confirm("Stop the server?")) void api.quit();
+    if (confirm(inApp ? "Quit cc-center? Watching stops until you open it again." : "Stop the server?"))
+      void api.quit();
   });
 }

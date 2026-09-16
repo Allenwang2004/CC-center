@@ -7,8 +7,9 @@
  * revoked, or signed out from another tab -- drops back to the sign-in screen.
  */
 
-import { SIGNED_OUT, api, listen } from "./core/api.js";
-import { $, $$, composing, h } from "./ui/dom.js";
+import { SIGNED_OUT, api, inApp, listen } from "./core/api.js";
+import type { Stream } from "./core/api.js";
+import { $, $$, composing, h, toast } from "./ui/dom.js";
 import { unsavedCount } from "./ui/editor/editor.js";
 import { adopt, store } from "./core/store.js";
 import {
@@ -16,27 +17,17 @@ import {
   renderRemoteToggle, renderScope, renderStatus,
 } from "./ui/sidebar.js";
 import { renderAgents } from "./views/agents.js";
-import { renderActivity, renderReport } from "./views/activity.js";
+import { renderActivity } from "./views/activity.js";
+import { loadClaudeFiles, renderClaude, setClaudeQuery } from "./views/claudemd.js";
 import { projectNames, renderProjects } from "./views/projects.js";
 import { renderSessions, sessionFilterOptions } from "./views/sessions.js";
 import { bindSettings, renderSettings } from "./views/settings.js";
 import { bindSignin, hideSignin, showSignin } from "./views/signin.js";
 import type { AppState, Auth, LogLine, PaneName, Settings } from "./core/types.js";
 
-const PANES: PaneName[] = ["agents", "projects", "sessions", "activity", "report", "settings"];
+const PANES: PaneName[] = ["agents", "projects", "sessions", "activity", "claude", "settings"];
 
 /* -- small helpers ------------------------------------------------------- */
-
-let toastTimer: number | undefined;
-
-function toast(message: string): void {
-  const el = document.getElementById("toast");
-  if (!el) return;
-  el.textContent = message;
-  el.classList.add("show");
-  window.clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => el.classList.remove("show"), 2600);
-}
 
 async function copy(text: string, note: string): Promise<void> {
   try {
@@ -93,7 +84,7 @@ function renderPane(): void {
     renderSessions(host);
   }
   if (store.pane === "activity") renderActivity(host);
-  if (store.pane === "report") void loadReport();
+  if (store.pane === "claude") renderClaude(host);
   if (store.pane === "settings") renderSettings();
 }
 
@@ -104,19 +95,8 @@ function renderAll(): void {
   if (store.pane !== "agents") renderPane();
 }
 
-async function loadReport(): Promise<void> {
-  const host = paneBody("report");
-  if (!host) return;
-  try {
-    store.reportText = await api.markdown(
-      store.reportView, store.settings.prompts, store.settings.tokens);
-  } catch (err) {
-    store.reportText = err instanceof Error ? err.message : "Could not build the report";
-  }
-  renderReport(host);
-}
-
 function showPane(name: PaneName): void {
+  const was = store.pane;
   store.pane = name;
   for (const p of PANES) {
     const tab = $(`#tabs button[data-pane="${p}"]`);
@@ -125,6 +105,9 @@ function showPane(name: PaneName): void {
     if (pane) pane.hidden = p !== name;
   }
   renderPane();
+  // CLAUDE.md files are read from disk, not from the report: fetch them on the way in.
+  const claude = paneBody("claude");
+  if (name === "claude" && was !== "claude" && claude) void loadClaudeFiles(claude);
 }
 
 /* -- events -------------------------------------------------------------- */
@@ -149,9 +132,12 @@ function bind(): void {
       }
     }
     if (el.dataset.removeHost) {
-      const next = store.hosts.filter((x) => x !== el.dataset.removeHost);
-      store.hosts = next;
-      void api.hosts(next).then(paintChrome);
+      void api.removeHost(el.dataset.removeHost)
+        .then((res) => {
+          store.hosts = res.hosts;
+          paintChrome();
+        })
+        .catch((err) => toast(err instanceof Error ? err.message : "Could not remove the host"));
     }
   });
 
@@ -194,24 +180,10 @@ function bind(): void {
     renderPane();
   });
 
-  document.getElementById("report-view")?.addEventListener("change", (e) => {
-    store.reportView = (e.target as HTMLSelectElement).value as "day" | "project";
-    void loadReport();
-  });
-  document.getElementById("report-raw")?.addEventListener("click", () => {
-    store.showRaw = !store.showRaw;
-    const body = paneBody("report");
-    if (body) renderReport(body);
-  });
-  document.getElementById("report-copy")?.addEventListener("click", () =>
-    void copy(store.reportText, "Report copied"));
-  document.getElementById("report-save")?.addEventListener("click", async () => {
-    try {
-      const res = await api.exportFile("markdown");
-      toast(`Saved to ${res.path}`);
-    } catch (err) {
-      toast(err instanceof Error ? err.message : "Could not save");
-    }
+  bindInput("search-claude", (v) => setClaudeQuery(v));
+  document.getElementById("claude-reload")?.addEventListener("click", () => {
+    const body = paneBody("claude");
+    if (body) void loadClaudeFiles(body);
   });
 
   document.getElementById("refresh")?.addEventListener("click", () => {
@@ -229,10 +201,24 @@ function bind(): void {
     const input = e.target as HTMLInputElement;
     if (composing(e as KeyboardEvent)) return;
     if ((e as KeyboardEvent).key !== "Enter" || !input.value.trim()) return;
-    const next = [...store.hosts, input.value.trim()];
+    const host = input.value.trim();
+    if (store.hosts.includes(host) || host === store.localHost) {
+      toast(`${host} is already in the list`);
+      return;
+    }
     input.value = "";
-    store.hosts = next;
-    void api.hosts(next).then(paintChrome);
+    void api.addHost(host)
+      .then((res) => {
+        store.hosts = res.hosts;
+        paintChrome();
+        // Collect from it right away instead of waiting for the next remote pass.
+        void api.refresh([host]);
+        toast(`Added ${host}, collecting`);
+      })
+      .catch((err) => {
+        input.value = host;
+        toast(err instanceof Error ? err.message : "Could not add the host");
+      });
   });
 
   document.addEventListener("keydown", (e) => {
@@ -323,7 +309,7 @@ async function reload(): Promise<void> {
 
 /* -- boot ---------------------------------------------------------------- */
 
-let stream: EventSource | null = null;
+let stream: Stream | null = null;
 
 /** Drop to the sign-in screen: close the stream, forget nothing else. */
 function lock(auth: Auth | null): void {
@@ -335,7 +321,15 @@ function lock(auth: Auth | null): void {
 
 /** Load the state and open the stream. Only ever runs signed in. */
 async function start(): Promise<void> {
-  const state = await api.state();
+  const booting = document.getElementById("booting");
+  // In the app the first call waits for the sidecar; say so instead of a blank window.
+  if (booting && inApp && !store.report) booting.hidden = false;
+  let state;
+  try {
+    state = await api.state();
+  } finally {
+    if (booting) booting.hidden = true;
+  }
   if (!state.auth.signed_in) {
     lock(state.auth);
     return;
@@ -366,6 +360,16 @@ async function start(): Promise<void> {
     settings: (s) => {
       store.settings = s;
       paintChrome();
+    },
+    // From the menu bar or a notification: open on that session.
+    focus: (sessionId) => {
+      showPane("agents");
+      window.setTimeout(() => {
+        const card = document.getElementById(`agent-${sessionId}`);
+        card?.scrollIntoView({ block: "center", behavior: "smooth" });
+        card?.classList.add("is-focused");
+        window.setTimeout(() => card?.classList.remove("is-focused"), 2400);
+      }, 50);
     },
   });
 }

@@ -30,12 +30,12 @@ import sqlite3
 import subprocess
 import sys
 import threading
-from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from ..cloud import CloudError
+from . import claudemd
 from .bus import BUS
 from .daemon import clear_pidfile, write_pidfile
 from .desktop import open_url
@@ -50,8 +50,9 @@ from .settings import (
 )
 from .util import now
 
-# 每次啟動換一把。頁面拿得到, 別的分頁拿不到。
-TOKEN = secrets.token_urlsafe(24)
+# 每次啟動換一把。頁面拿得到, 別的分頁拿不到。桌面 app 是它把 server 當 sidecar
+# 帶起來的, 那把 token 就由它產生、用環境變數交進來, 它自己才打得進 /api/*。
+TOKEN = os.environ.get("CC_CENTER_TOKEN") or secrets.token_urlsafe(24)
 SERVER_STARTED = now()
 
 # 前端是直接從磁碟端出去的, 改了檔案就該看到新的。可是瀏覽器對 ES module 的
@@ -85,7 +86,9 @@ class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt, *args):
-        pass
+        # 平常安靜; CC_CENTER_DEBUG=1 時把每個請求印到 stderr (桌面 app 的 log 看得到)
+        if os.environ.get("CC_CENTER_DEBUG"):
+            super().log_message(fmt, *args)
 
     # -- 小工具
 
@@ -175,14 +178,14 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/report":
             return self.send_json(MON.payload(st))
-        if path == "/api/markdown":
-            return self.send_text(
-                MON.markdown(st, q.get("prompts", [None])[0],
-                             q.get("tokens", [None])[0] in ("1", "true"),
-                             q.get("view", ["day"])[0]),
-                "text/markdown; charset=utf-8")
-        if path == "/api/json":
-            return self.send_text(MON.raw_json(st), "application/json; charset=utf-8")
+        if path == "/api/claudemd":
+            # 每次都真的去讀檔 (遠端一台一次 ssh), 頁面開這個分頁才會問
+            hosts = MON.active_hosts(st) if st.get("remote_enabled", True) else []
+            files = claudemd.collect(MON.local_host, hosts, MON.project_list(),
+                                     timeout=int(st["ssh_timeout"] or 8))
+            return self.send_json({"files": files, "local_host": MON.local_host})
+        if path == "/api/live":
+            return self.send_json(MON.live(st))
         if path == "/api/events":
             return self.stream()
         return self.send_json({"error": "not found"}, 404)
@@ -208,6 +211,9 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         try:
             self.wfile.write(b"retry: 2000\n\n")
+            # 一接上就先講現在有幾個在等你 —— 訂閱者 (桌面 app 的狀態列) 不用等下一次變化
+            self.wfile.write(f"event: attention\ndata: {json.dumps({'count': len(MON.attention)})}\n\n"
+                             .encode("utf-8"))
             self.wfile.flush()
             while True:
                 try:
@@ -297,8 +303,24 @@ class Handler(BaseHTTPRequestHandler):
                 t.join()
             return self.send_json({"results": [out[h] for h in hosts if h in out]})
 
-        if path == "/api/export":
-            return self.do_export(body)
+        if path == "/api/session/signal":
+            try:
+                out = MON.signal_session(body.get("host") or MON.local_host,
+                                         body.get("session_id") or "",
+                                         (body.get("signal") or "INT").upper(),
+                                         read_settings())
+            except (ValueError, OSError, subprocess.SubprocessError) as e:
+                return self.send_json({"error": str(e) or type(e).__name__}, 400)
+            return self.send_json({"ok": True, **out})
+
+        if path == "/api/claudemd":
+            try:
+                target = claudemd.write(MON.local_host, body.get("host") or "",
+                                        body.get("cwd") or None, body.get("text") or "",
+                                        timeout=int(read_settings()["ssh_timeout"] or 8))
+            except (OSError, subprocess.SubprocessError) as e:
+                return self.send_json({"error": str(e) or type(e).__name__}, 400)
+            return self.send_json({"ok": True, "path": target})
 
         if path == "/api/entry":
             try:
@@ -375,29 +397,30 @@ class Handler(BaseHTTPRequestHandler):
         if remotes:
             MON.scan_remotes(st, remotes, "collect now")
 
-    def do_export(self, body):
-        st = read_settings()
-        fmt = body.get("format") or "markdown"
-        if fmt == "markdown":
-            text, ext = MON.markdown(st), "md"
-        elif fmt == "json":
-            text, ext = MON.raw_json(st), "json"
-        else:
-            text, ext = body.get("text") or "", "md"
-        path = body.get("path")
-        if path:
-            target = Path(os.path.expanduser(path))
-        else:
-            days = (MON.window or {}).get("days") or []
-            stamp = days[-1] if days else datetime.now().strftime("%Y-%m-%d")
-            suffix = "-ai" if fmt == "text" else ""
-            target = Path(os.path.expanduser(st["out_dir"])) / f"{stamp}{suffix}.{ext}"
-        try:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(text, encoding="utf-8")
-        except OSError as e:
-            return self.send_json({"error": str(e)}, 500)
-        return self.send_json({"path": str(target)})
+
+def watch_parent(bye):
+    """桌面 app 把 server 當 sidecar 帶著: app 沒了 (被砍、登出、當掉), server 也該走。
+
+    macOS 沒有 prctl(PR_SET_PDEATHSIG), 所以殼把自己的 pid 用 CC_CENTER_PARENT_PID
+    交進來, 這裡每兩秒看它還在不在。不是 sidecar 就什麼都不做。
+    """
+    try:
+        parent = int(os.environ.get("CC_CENTER_PARENT_PID") or 0)
+    except ValueError:
+        parent = 0
+    if not parent:
+        return
+
+    def loop():
+        while True:
+            threading.Event().wait(2)
+            try:
+                os.kill(parent, 0)
+            except OSError:
+                bye()
+                return
+
+    threading.Thread(target=loop, daemon=True, name="parent-watch").start()
 
 
 def serve(port_hint, bind, open_browser):
@@ -405,7 +428,8 @@ def serve(port_hint, bind, open_browser):
     if not WEB.is_dir():
         sys.exit(f"找不到 {WEB}")
     migrate_old_names()
-    for port in range(port_hint, port_hint + 20):
+    # port 0 = 讓系統挑一個空的 (桌面 app 用, 它會從下面那行 ready 讀回真正的 port)
+    for port in ([0] if port_hint == 0 else range(port_hint, port_hint + 20)):
         try:
             httpd = ThreadingHTTPServer((bind, port), Handler)
             break
@@ -413,6 +437,7 @@ def serve(port_hint, bind, open_browser):
             continue
     else:
         sys.exit(f"{port_hint}~{port_hint + 19} 都被占用了")
+    port = httpd.server_address[1]
     httpd.daemon_threads = True
     try:
         # 瀏覽器關掉 SSE 連線時會噴 SIGPIPE, 預設動作是直接殺掉 process
@@ -431,13 +456,19 @@ def serve(port_hint, bind, open_browser):
     def bye(*_):
         stop_event.set()
         clear_pidfile()
-        print("\nbye", flush=True)
         threading.Thread(target=httpd.shutdown, daemon=True).start()
+        try:
+            print("\nbye", flush=True)
+        except OSError:
+            pass            # stdout 是殼那邊的 pipe, 殼已經不在了 —— 那正是要走的原因
 
     signal.signal(signal.SIGTERM, bye)
     signal.signal(signal.SIGINT, bye)
+    watch_parent(bye)
 
     print(f"cc-center app → {url}  (pid {os.getpid()})", flush=True)
+    # 給機器讀的那行 (桌面 app 等這行才把視窗指過來)
+    print("ready " + json.dumps({"port": port, "url": url, "pid": os.getpid()}), flush=True)
     if open_browser:
         threading.Timer(0.4, lambda: open_url(url)).start()
     try:

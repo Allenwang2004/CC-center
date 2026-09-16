@@ -18,15 +18,16 @@ newest first. See `alive_index` and `alive_of`.
 from __future__ import annotations
 
 import json
+import os
 import socket
 import subprocess
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .. import analysis, render, scanner, store, sync
+from .. import analysis, scanner, store, sync
 from .. import cloud as cloudmod
-from . import journal
+from . import control, journal
 from .attention import attention_of
 from .bus import BUS
 from .daemon import read_pidfile
@@ -85,6 +86,12 @@ class Monitor:
             self.log.append(entry)
             del self.log[:-300]
         BUS.emit("log", entry)
+        # 也印到 stdout: CLI 版進 app.log, 桌面 app 由殼收進同一個檔 —— 別人的機器
+        # 出事時, 這是唯一看得到的東西
+        try:
+            print(f"[{level}]{f' [{host}]' if host else ''} {msg}", flush=True)
+        except OSError:
+            pass
 
     # -- 視窗
 
@@ -505,10 +512,50 @@ class Monitor:
                 continue
             title = scanner.title_of(s)
             self.say(f"{a['label']}: {title}", "warn", host)
-            notify(f"{a['label']}"
-                   + (f" ({a['tool']})" if a["kind"] != "waiting" and a["tool"] else ""),
-                   f"{host} · {Path(s.get('cwd') or '').name}",
-                   title, bool(st.get("notify_sound")), url)
+            head = (f"{a['label']}"
+                    + (f" ({a['tool']})" if a["kind"] != "waiting" and a["tool"] else ""))
+            sub = f"{host} · {Path(s.get('cwd') or '').name}"
+            if os.environ.get("CC_CENTER_APP"):
+                # 桌面 app: 殼用自己的身分發通知 (點了會回到視窗), 這裡只把內容推過去
+                BUS.emit("notify", {"title": head, "subtitle": sub, "body": title,
+                                    "host": host, "session_id": s.get("session_id"),
+                                    "sound": bool(st.get("notify_sound"))})
+            else:
+                notify(head, sub, title, bool(st.get("notify_sound")), url)
+
+    # -- 對 session 動手
+
+    def find_session(self, host, session_id):
+        with self.lock:
+            for s in self.by_host.get(host) or []:
+                if s.get("session_id") == session_id:
+                    return s
+        return None
+
+    def signal_session(self, host, session_id, sig, st):
+        """Interrupt (INT) 或 End (TERM) 一個 session 的 claude。成功後很快重掃那台。"""
+        sess = self.find_session(host, session_id)
+        if not sess:
+            raise ValueError("That session is not in the current window any more.")
+        out = control.signal_session(sess, self.procs.get(host), sig, self.local_host,
+                                     timeout=int(st.get("ssh_timeout") or 8))
+        self.say(f"sent SIG{sig} to claude (pid {out['pid']}): {scanner.title_of(sess)}",
+                 "info", host)
+
+        def soon():
+            threading.Event().wait(2.0)
+            if host == self.local_host:
+                self.local_fingerprint = None
+                self.scan_local(st, f"after SIG{sig}")
+            else:
+                self.scan_remotes(st, [host], f"after SIG{sig}")
+        threading.Thread(target=soon, daemon=True).start()
+        return out
+
+    def live(self, st):
+        """狀態列選單用的短清單 (在等你的 / 在跑的)。"""
+        with self.lock:
+            return control.live(self.sessions(), st, self.alive_of)
 
     def plan_usage(self):
         """額度是帳號的, 不分機器 —— 哪台的快照最新就用哪台的。"""
@@ -616,32 +663,6 @@ class Monitor:
                 ch.pop("cwd", None)
                 out.setdefault(cwd, {})[day] = ch
         return out
-
-    def markdown(self, st, prompts=None, tokens=None, view="day"):
-        with self.lock:
-            scanner.TZ = scanner.parse_tz(st["tz"])
-            sessions = self.sessions()
-            if view == "project":
-                merged = {}
-                for per_host in self.orphans.values():
-                    for cwd, lst in per_host.items():
-                        merged.setdefault(cwd, []).extend(lst)
-                return render.render_projects(sessions, merged)
-            multi = len({s["host"] for s in sessions}) > 1
-            return render.render(sessions, multi,
-                             int(st["prompts"] if prompts is None else prompts),
-                             bool(st["tokens"] if tokens is None else tokens))
-
-    def raw_json(self, st):
-        with self.lock:
-            scanner.TZ = scanner.parse_tz(st["tz"])
-            w = self.window or {}
-            return json.dumps({
-                "generated_at": datetime.now(timezone.utc).isoformat(),
-                "window": {"since": w.get("since"), "until": w.get("until")},
-                "repo_commits": self.repo_commits(),
-                "sessions": [scanner.to_json(s) for s in self.sessions()],
-            }, ensure_ascii=False, indent=2)
 
 
 MON = Monitor()

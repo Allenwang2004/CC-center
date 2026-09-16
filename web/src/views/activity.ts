@@ -4,8 +4,8 @@
  */
 
 import { h, mount } from "../ui/dom.js";
-import { basename, count, dayLabel, duration, plural } from "../core/format.js";
-import { commitsIn, slices, store } from "../core/store.js";
+import { basename, count, dayLabel, duration } from "../core/format.js";
+import { commitsIn, slices } from "../core/store.js";
 import { renderSpend } from "./spend.js";
 
 interface Bar {
@@ -97,63 +97,4 @@ export function renderActivity(host: HTMLElement): void {
         duration),
       bars("Time by project", rank(perProject), duration),
       bars("Tools used", rank(perTool), (n) => String(n))));
-}
-
-export function renderReport(host: HTMLElement): void {
-  const view = h("div", { class: "prose" });
-  const raw = h("pre", { class: "raw", hidden: !store.showRaw });
-  raw.textContent = store.reportText;
-  view.innerHTML = markdownToHtml(store.reportText);
-  view.hidden = store.showRaw;
-  mount(host, view, raw);
-  const meta = document.getElementById("report-meta");
-  if (meta)
-    meta.textContent =
-      `${plural(store.report?.sessions.length ?? 0, "session")}`
-      + ` / ${store.reportText.length.toLocaleString()} characters`;
-}
-
-/** Enough Markdown for the report the CLI already produces. */
-export function markdownToHtml(md: string): string {
-  const escape = (s: string) =>
-    s.replace(/[&<>"']/g, (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string);
-  const inline = (t: string) =>
-    escape(t)
-      .replace(/`([^`]+)`/g, "<code>$1</code>")
-      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-      .replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g,
-        '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
-
-  const out: string[] = [];
-  let depth = 0;
-  const closeTo = (n: number) => {
-    while (depth > n) {
-      out.push("</ul>");
-      depth--;
-    }
-  };
-  for (const rawLine of md.split("\n")) {
-    const line = rawLine.replace(/\s+$/, "");
-    const bullet = /^(\s*)-\s+(.*)$/.exec(line);
-    if (bullet) {
-      const want = Math.floor((bullet[1] as string).length / 2) + 1;
-      while (depth < want) {
-        out.push("<ul>");
-        depth++;
-      }
-      closeTo(want);
-      out.push(`<li>${inline(bullet[2] as string)}</li>`);
-      continue;
-    }
-    closeTo(0);
-    if (!line.trim()) continue;
-    if (line.startsWith("### ")) out.push(`<h3>${inline(line.slice(4))}</h3>`);
-    else if (line.startsWith("## ")) out.push(`<h2>${inline(line.slice(3))}</h2>`);
-    else if (line.startsWith("# ")) out.push(`<h1>${inline(line.slice(2))}</h1>`);
-    else if (/^---+$/.test(line)) out.push("<hr>");
-    else out.push(`<p>${inline(line)}</p>`);
-  }
-  closeTo(0);
-  return out.join("\n");
 }

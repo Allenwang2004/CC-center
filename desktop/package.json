@@ -1,0 +1,18 @@
+{
+  "name": "cc-center-desktop",
+  "version": "2.0.0",
+  "description": "The macOS app: a Tauri shell around the cc-center server (bundled as a sidecar) and the same web/ front end.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "web": "python3 bundle-web.py",
+    "sidecar": "./build-sidecar.sh",
+    "dev": "./with-env.sh tauri dev",
+    "build": "./with-env.sh tauri build",
+    "icons": "python3 make-icons.py && tauri icon icon.png",
+    "install-app": "./install-app.sh"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.4.0"
+  }
+}

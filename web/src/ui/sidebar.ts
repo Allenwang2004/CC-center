@@ -154,7 +154,7 @@ export function bindMachineDrag(): void {
       .map((r) => r.dataset.host)
       .filter((x): x is string => Boolean(x) && x !== store.localHost);
     store.hosts = order;
-    void api.hosts(order);
+    void api.reorderHosts(order).then((res) => (store.hosts = res.hosts));
   };
   host.addEventListener("pointerup", drop);
   host.addEventListener("pointercancel", drop);

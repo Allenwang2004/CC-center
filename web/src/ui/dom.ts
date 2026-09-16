@@ -159,3 +159,17 @@ export const forget = (key: string): void => void kept.delete(key);
 export function forgetPrefix(prefix: string): void {
   for (const k of [...kept.keys()]) if (k.startsWith(prefix)) kept.delete(k);
 }
+
+/* -- toast ---------------------------------------------------------------- */
+
+let toastTimer: number | undefined;
+
+/** One line at the bottom that goes away by itself. */
+export function toast(message: string): void {
+  const el = document.getElementById("toast");
+  if (!el) return;
+  el.textContent = message;
+  el.classList.add("show");
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => el.classList.remove("show"), 2600);
+}

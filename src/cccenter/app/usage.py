@@ -93,7 +93,9 @@ def claude_settings_file() -> Path:
 
 
 def hook_command() -> str:
-    from .paths import ROOT
+    from .paths import FROZEN, ROOT
+    if FROZEN:                                   # 桌面 app 的 sidecar 就是這個 binary
+        return f"{sys.executable} statusline"
     return f"{ROOT / 'bin' / 'cc-center-app'} statusline"
 
 

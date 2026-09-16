@@ -6,23 +6,33 @@ page and is read-only at runtime; `~/.cc-center` holds the database, the
 settings and the log, and survives a `git clean`. Point `CC_CENTER_STATE`
 somewhere else to run a second copy without touching the first --- the tests do
 exactly that.
+
+Inside the desktop app the code is a PyInstaller bundle (`desktop/`): there is
+no repository, `sys._MEIPASS` is the unpacked bundle, and `scanner.py` and
+`web/` are copied into it at the same relative places, so the paths below still
+resolve. `FROZEN` says which of the two worlds this is.
 """
 
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 from ..env import load_env
 
+FROZEN = bool(getattr(sys, "frozen", False))            # PyInstaller 包起來的 sidecar
+BUNDLE = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else None
+
 PACKAGE = Path(__file__).resolve().parent.parent        # src/cccenter
 SRC = PACKAGE.parent                                    # src
-ROOT = SRC.parent                                       # the repository
+ROOT = BUNDLE if BUNDLE else SRC.parent                 # the repository (or the bundle)
 
 load_env()   # ROOT/.env: 個人設定 (機器清單、時區…) 放這裡, 不進版控。下面才開始讀環境變數。
 
 # 遠端 agent 就是這個檔 —— 用 stdin 餵給對面的 python3, 所以它必須自成一檔。
-SCANNER = PACKAGE / "scanner.py"
+# 包成 sidecar 時 build 腳本把它放在 bundle 裡同樣的相對位置。
+SCANNER = (BUNDLE / "cccenter" / "scanner.py") if BUNDLE else PACKAGE / "scanner.py"
 
 
 def _web_root() -> Path:
@@ -30,7 +40,7 @@ def _web_root() -> Path:
     env = os.environ.get("CC_CENTER_WEB")
     if env:
         return Path(env).expanduser()
-    for base in (ROOT, PACKAGE, PACKAGE.parent):
+    for base in ([BUNDLE] if BUNDLE else []) + [ROOT, PACKAGE, PACKAGE.parent]:
         if (base / "web" / "index.html").is_file():
             return base / "web"
     return ROOT / "web"

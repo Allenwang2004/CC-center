@@ -176,6 +176,65 @@ html, body {
   overflow-x: auto;
 }
 
+/* -- reaching into a session ---------------------------------------------- */
+
+.controls { display: inline-flex; gap: 6px; align-items: center; }
+.row-actions .controls { margin-left: auto; }
+.run .controls { margin-right: 6px; }
+.btn.tiny.danger:hover { color: var(--removed); border-color: var(--removed); }
+.btn:disabled { opacity: 0.5; cursor: progress; }
+/* Brought here from the menu bar or a notification: say which one, briefly. */
+.alert.is-focused, .run.is-focused { outline: 2px solid var(--focus); outline-offset: 3px; }
+
+/* -- Claude.md ------------------------------------------------------------ */
+
+/*
+ * One section for the global files, one for the projects; each file is a
+ * card with the same header the Projects tab uses, and either the editor or
+ * a Create button. The path is the thing to read, so it gets the right edge.
+ */
+.claude-group { margin: 6px 0 28px; }
+.claude-group > h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 6px;
+  padding: 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--rule-firm);
+}
+.claude-group > h2 .muted { font-weight: 400; letter-spacing: 0; }
+.claude-file { padding: 12px 0 18px; border-bottom: 1px solid var(--rule); }
+.claude-file:last-child { border-bottom: 0; }
+.claude-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.claude-head h3 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+/* The path is the point here, so it is shown whole rather than trimmed from the left. */
+.claude-head .project-path {
+  direction: ltr;
+  max-width: 60%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.claude-create {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px dashed var(--rule-firm);
+  border-radius: 6px;
+}
+.claude-create p { margin: 0; }
+
 /* -- shell --------------------------------------------------------------- */
 
 .shell {

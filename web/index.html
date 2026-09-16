@@ -17,6 +17,14 @@
   server is signed in. Email, then the six-digit code from the mail. The
   browser never talks to Supabase; the server does, on this page's behalf.
 -->
+<!-- Inside the app the server is a sidecar that takes a few seconds to come up. -->
+<div id="booting" class="signin" hidden>
+  <div class="signin-card">
+    <h1>cc-center</h1>
+    <p class="signin-lead">Starting the server…</p>
+  </div>
+</div>
+
 <div id="signin" class="signin" hidden>
   <form id="signin-form" class="signin-card" autocomplete="on">
     <h1>cc-center</h1>
@@ -97,7 +105,7 @@ SUPABASE_ANON_KEY=...</pre>
         <button data-pane="projects" role="tab" aria-selected="false">Projects<span class="badge" id="count-projects"></span></button>
         <button data-pane="sessions" role="tab" aria-selected="false">Sessions<span class="badge" id="count-sessions"></span></button>
         <button data-pane="activity" role="tab" aria-selected="false">Activity</button>
-        <button data-pane="report" role="tab" aria-selected="false">Report</button>
+        <button data-pane="claude" role="tab" aria-selected="false">Claude.md</button>
         <button data-pane="settings" role="tab" aria-selected="false">Settings</button>
       </nav>
       <span id="scope" class="scope"></span>
@@ -133,19 +141,14 @@ SUPABASE_ANON_KEY=...</pre>
       <div id="pane-activity-body"></div>
     </section>
 
-    <section id="pane-report" class="pane" role="tabpanel" hidden>
+    <section id="pane-claude" class="pane" role="tabpanel" hidden>
       <div class="toolbar">
-        <select id="report-view">
-          <option value="project">By project</option>
-          <option value="day">By day</option>
-        </select>
-        <button id="report-copy" class="btn ghost" type="button">Copy Markdown</button>
-        <button id="report-save" class="btn ghost" type="button">Save file</button>
-        <button id="report-raw" class="btn ghost" type="button">Toggle source</button>
+        <input type="search" id="search-claude" placeholder="Filter projects or machines">
+        <button id="claude-reload" class="btn ghost" type="button" title="Read every file from disk again">Reload</button>
         <span class="spacer"></span>
-        <span id="report-meta" class="muted"></span>
+        <span id="claude-meta" class="muted"></span>
       </div>
-      <div id="pane-report-body"></div>
+      <div id="pane-claude-body"></div>
     </section>
     <section id="pane-settings" class="pane" role="tabpanel" hidden>
       <div id="pane-settings-body" class="settings">
@@ -183,7 +186,7 @@ SUPABASE_ANON_KEY=...</pre>
                 <option value="all">Everything</option>
               </select>
             </label>
-            <p class="hint">The local machine is usually in front of you, so remote-only is the default.</p>
+            <p class="hint">Everything by default: a session waiting in another window is easy to miss. Remote-only if this machine is always in front of you.</p>
             <label class="field-row"><span>Idle before nudging</span><input type="number" id="notify_waiting_after" min="5"><i class="unit">s</i></label>
             <p class="hint">How long after the assistant's last word before it counts as waiting for you.</p>
             <label class="field-row"><span>Tool stalled</span><input type="number" id="notify_tool_after" min="10"><i class="unit">s</i></label>
@@ -204,19 +207,6 @@ SUPABASE_ANON_KEY=...</pre>
             <p class="hint">Local time. Not a moment but a threshold: if the machine was asleep, it catches up on the next pass, back to three days.</p>
             <label class="field-row"><span>Model</span><input type="text" id="journal_model" placeholder="haiku"></label>
             <p class="hint">Passed to <code>claude -p --model</code>. A day's record runs to tens of thousands of tokens, so the cheap one is the default. By hand, any day: <code>bin/cc-center-app journal --date YYYY-MM-DD</code></p>
-          </div>
-        </section>
-
-        <section class="setting-group">
-          <header>
-            <h2>Reports</h2>
-            <p>The Markdown on the Report tab, and where Save file puts it.</p>
-          </header>
-          <div class="setting-fields">
-            <label class="field-row"><span>Questions per session</span><input type="number" id="prompts" min="1" max="25"></label>
-            <label class="check"><input type="checkbox" id="tokens"> Show tokens and cost</label>
-            <p class="hint">Only in the Markdown. Sessions and Activity always show cost.</p>
-            <label class="field-row wide"><span>Export folder</span><input type="text" id="out_dir"></label>
           </div>
         </section>
 

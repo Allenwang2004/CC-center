@@ -6,7 +6,7 @@
  */
 
 import { api } from "../core/api.js";
-import { h, mount } from "../ui/dom.js";
+import { h, mount, toast } from "../ui/dom.js";
 import { ago, basename, clock, count, duration, epoch, whenLabel } from "../core/format.js";
 import { store } from "../core/store.js";
 import type { LimitWindow, Session } from "../core/types.js";
@@ -96,7 +96,7 @@ function resumeCommand(s: Session): string {
 
 function attentionCard(s: Session): HTMLElement {
   const a = s.attention!;
-  return h("article", { class: "alert" },
+  return h("article", { class: "alert", id: `agent-${s.session_id}` },
     h("div", { class: "alert-mark" }),
     h("div", { class: "alert-body" },
       h("h3", null, a.label, a.tool && h("span", { class: "tag" }, a.tool)),
@@ -110,7 +110,41 @@ function attentionCard(s: Session): HTMLElement {
         h("button", { class: "btn", type: "button", data: { copy: resumeCommand(s) } },
           "Copy resume command"),
         h("button", { class: "btn ghost", type: "button", data: { focusSession: s.session_id } },
-          "Open record"))));
+          "Open record"),
+        controls(s))));
+}
+
+/*
+ * Reaching into a session. Interrupt is Ctrl+C: this turn stops, the
+ * conversation stays. End is the process: it exits, and the resume command
+ * still works afterwards -- so End asks first, Interrupt does not. Only
+ * offered when a claude process is known to be there; with alive unknown
+ * there is nothing to send to.
+ */
+function controls(s: Session): HTMLElement | null {
+  if (s.alive !== true) return null;
+  const send = async (signal: "INT" | "TERM", btn: HTMLButtonElement) => {
+    if (signal === "TERM"
+        && !confirm(`End this session? claude exits; you can resume it later.\n\n${s.title}`)) return;
+    btn.disabled = true;
+    try {
+      const res = await api.signalSession({ host: s.host, session_id: s.session_id, signal });
+      toast(signal === "INT" ? `Interrupted (pid ${res.pid})` : `Ended (pid ${res.pid})`);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not signal the session");
+    } finally {
+      btn.disabled = false;
+    }
+  };
+  const interrupt = h("button", { class: "btn ghost tiny", type: "button",
+                                  title: "Send Ctrl+C: stop what it is doing now, keep the conversation" },
+                      "Interrupt") as HTMLButtonElement;
+  const end = h("button", { class: "btn ghost tiny danger", type: "button",
+                            title: "End the claude process; the session can be resumed later" },
+                "End") as HTMLButtonElement;
+  interrupt.addEventListener("click", () => void send("INT", interrupt));
+  end.addEventListener("click", () => void send("TERM", end));
+  return h("span", { class: "controls" }, interrupt, end);
 }
 
 function runningRow(s: Session): HTMLElement {
@@ -118,7 +152,7 @@ function runningRow(s: Session): HTMLElement {
   const label = tail?.state === "tool"
     ? `running ${tail.tool ?? "a tool"}`
     : tail?.state === "waiting" ? "idle, last spoke" : "working";
-  return h("article", { class: "run" },
+  return h("article", { class: "run", id: `agent-${s.session_id}` },
     h("span", { class: `pulse ${s.alive === true ? "on" : "unknown"}`,
                 title: s.alive === true ? "A claude process is running in this folder"
                   : "Could not check this machine for a claude process" }),
@@ -129,6 +163,7 @@ function runningRow(s: Session): HTMLElement {
         h("span", { class: "muted" }, s.host),
         h("span", { class: "muted" }, `${label} · ${ago(secondsSince(tail?.at))}`)),
       ctxMeter(s)),
+    controls(s),
     h("button", { class: "btn ghost", type: "button", data: { copy: resumeCommand(s) } },
       "Resume"));
 }

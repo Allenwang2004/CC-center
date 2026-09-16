@@ -57,8 +57,6 @@ DEFAULT_SETTINGS = {
     "disabled_hosts": [],              # 有勾的才收
     "sidechains": False,
     "oneshot": False,                  # claude -p / SDK 的一次性執行算不算一段工作
-    "tokens": False,
-    "prompts": 5,
     "entrypoints": [],
     "ssh_timeout": _int_env("CC_SSH_TIMEOUT", 8),
     "remote_enabled": True,            # 關掉就完全不碰遠端 (下班連不到的時候)
@@ -67,11 +65,10 @@ DEFAULT_SETTINGS = {
     "remote_poll": 300,                # 秒; 0 = 遠端只在手動按的時候收
     "remote_poll_hot": 60,             # 剛剛還有人在動的機器收快一點
     "live_window": 600,                # 秒; 這段時間內有動作就算「進行中」
-    "out_dir": str(Path.home() / "Documents" / "cc-center"),
     "theme": "auto",
     "browser": os.environ.get("CC_BROWSER", ""),   # macOS 的 app 名稱, 例如 Arc; 空的 = 系統預設
     # 「在等你」的通知
-    "notify_scope": "remote",          # off | remote | all
+    "notify_scope": "all",             # off | remote | all
     "notify_sound": True,
     "notify_waiting_after": 45,        # assistant 講完話幾秒後算在等你
     "notify_tool_after": 90,           # 檔案類工具發出去幾秒還沒回來 = 大概在等權限
@@ -110,20 +107,14 @@ def migrate_old_names():
                 except OSError:
                     pass
 
-    # 匯出資料夾如果還指著舊的預設值, 也一起換掉
-    if SETTINGS_FILE.is_file():
-        stale = str(Path.home() / "Documents" / "cc-daily")
-        if read_settings().get("out_dir") == stale:
-            write_settings({"out_dir": DEFAULT_SETTINGS["out_dir"]})
-
 
 def read_hosts():
+    """有 ~/.cc-center-hosts 就以它為準 (空的也算: 你把最後一台移掉了);
+    沒這個檔才退回 CC_HOSTS, 什麼都沒設就是只看本機。"""
     if HOSTS_FILE.is_file():
         lines = [ln.strip() for ln in HOSTS_FILE.read_text(encoding="utf-8").splitlines()]
-        hosts = [ln for ln in lines if ln and not ln.startswith("#")]
-        if hosts:
-            return hosts
-    return os.environ.get("CC_HOSTS", "").split()   # 沒設就是只看本機
+        return [ln for ln in lines if ln and not ln.startswith("#")]
+    return os.environ.get("CC_HOSTS", "").split()
 
 
 def write_hosts(hosts):
