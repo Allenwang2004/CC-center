@@ -14,10 +14,13 @@
     "verify": "npm run check && npm test && npm run smoke"
   },
   "devDependencies": {
+    "@excalidraw/excalidraw": "^0.18.1",
     "esbuild": "^0.28.2",
     "highlight.js": "^11.12.0",
     "jsdom": "^29.1.1",
     "katex": "^0.18.7",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "typescript": "^5.9.3"
   }
 }

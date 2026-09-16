@@ -28,6 +28,12 @@ const dirtyEditors = new Set<string>();
 
 export const unsavedCount = (): number => dirtyEditors.size;
 
+/** Other writing surfaces (the mind map) report their unsaved state here too. */
+export const setUnsaved = (key: string, unsaved: boolean): void => {
+  if (unsaved) dirtyEditors.add(key);
+  else dirtyEditors.delete(key);
+};
+
 export interface EditorOptions {
   key: string;
   kind: Kind;

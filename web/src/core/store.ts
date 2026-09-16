@@ -31,6 +31,8 @@ export interface Store {
   openNote: Map<string, string>;
   /** Which day each project's journal is open on; unset means the newest. */
   openJournal: Map<string, string>;
+  /** Projects whose mind map is unfolded (the canvas only mounts when it is). */
+  openBoards: Set<string>;
 }
 
 export const store: Store = {
@@ -49,6 +51,7 @@ export const store: Store = {
   openDays: new Set(),
   openNote: new Map(),
   openJournal: new Map(),
+  openBoards: new Set(),
 };
 
 export function adopt(state: AppState): void {

@@ -3,14 +3,15 @@
  *
  * The page makes no outside requests and ships no bundler, so anything it
  * borrows has to be a plain file it can import from disk: highlight.js for
- * code, KaTeX for math (with its fonts). Each is bundled once into a single ES
- * module here; the result is committed like web/dist, so the tool still runs
- * with nothing installed. Re-run after bumping a version:
+ * code, KaTeX for math (with its fonts), and Excalidraw for the mind map
+ * (with React inside it, and its fonts beside it). Each is bundled once here;
+ * the result is committed like web/dist, so the tool still runs with nothing
+ * installed. Re-run after bumping a version:
  *
  *   npm run vendor
  */
 import { build } from "esbuild";
-import { copyFileSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -39,6 +40,25 @@ copyFileSync(join(katex, "katex.min.css"), join(OUT, "katex.css"));
 for (const f of readdirSync(join(katex, "fonts")).filter((f) => f.endsWith(".woff2")))
   copyFileSync(join(katex, "fonts", f), join(OUT, "fonts", f));
 
-const versions = ["highlight.js", "katex"].map((n) => `${n} ${require(`${n}/package.json`).version}`);
+/*
+ * Excalidraw keeps its locales as lazy chunks and finds its fonts by URL at
+ * runtime (window.EXCALIDRAW_ASSET_PATH, set by core/vendor.ts), so it is
+ * built with splitting into a directory of its own rather than one file.
+ */
+const excalidraw = join(dirname(fileURLToPath(import.meta.url)), "..", "node_modules", "@excalidraw", "excalidraw");
+await build({
+  entryPoints: [join(dirname(fileURLToPath(import.meta.url)), "vendor-src", "excalidraw.js")],
+  bundle: true, splitting: true, format: "esm", minify: true, legalComments: "none",
+  outdir: join(OUT, "excalidraw"), entryNames: "index", chunkNames: "chunks/[name]-[hash]",
+  define: { "process.env.NODE_ENV": '"production"', "process.env.IS_PREACT": '"false"' },
+  logLevel: "error",
+});
+copyFileSync(join(excalidraw, "dist", "prod", "index.css"), join(OUT, "excalidraw", "index.css"));
+cpSync(join(excalidraw, "dist", "prod", "fonts"), join(OUT, "excalidraw", "fonts"), { recursive: true });
+console.log("excalidraw/ <- @excalidraw/excalidraw (bundle, css, fonts)");
+
+const versions = ["highlight.js", "katex", "react"]
+  .map((n) => `${n} ${require(`${n}/package.json`).version}`)
+  .concat(`@excalidraw/excalidraw ${JSON.parse(readFileSync(join(excalidraw, "package.json"), "utf8")).version}`);
 writeFileSync(join(OUT, "VERSIONS"), versions.join("\n") + "\n");
 console.log(versions.join(", "));

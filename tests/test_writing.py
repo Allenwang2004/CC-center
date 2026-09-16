@@ -36,6 +36,23 @@ class Saving(Sandbox):
         self.assertIn("第一則想法",
                       (self.project / "note" / f"{ref}.md").read_text(encoding="utf-8"))
 
+    def test_a_mind_map_is_one_row_per_project_saved_back_to_the_same_day(self):
+        scene = '{"type":"excalidraw","elements":[{"id":"a"}]}'
+        out = self.w.save("mindmap", "box", str(self.project), "2026-09-17", scene,
+                          DEFAULT_SETTINGS, title="ignored")
+        self.assertEqual(out, {"ref": "2026-09-17", "path": None, "warn": None, "title": ""})
+        again = '{"type":"excalidraw","elements":[{"id":"a"},{"id":"b"}]}'
+        self.w.save("mindmap", "box", str(self.project), "2026-09-17", again, DEFAULT_SETTINGS)
+        rows = [r for r in self.fake.rows() if r["kind"] == "mindmap"]
+        self.assertEqual([(r["ref"], r["day"], r["body"]) for r in rows],
+                         [("2026-09-17", "2026-09-17", again)])
+        self.assertEqual(store.get("mindmap", str(self.project), "box", "2026-09-17")["body"], again)
+        self.assertFalse((self.project / "note").exists())
+        with self.assertRaises(ValueError):
+            self.w.save("mindmap", "box", str(self.project), "", scene, DEFAULT_SETTINGS)
+        with self.assertRaises(ValueError):
+            self.w.delete("mindmap", "box", str(self.project), "2026-09-17")
+
     def test_a_journal_entry_goes_to_the_cloud_and_stays_out_of_the_folder(self):
         out = self.w.save("journal", "box", str(self.project), "2026-09-10",
                           "把 journal 改成只存我打的字", DEFAULT_SETTINGS)

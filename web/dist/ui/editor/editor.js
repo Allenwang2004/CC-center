@@ -17,6 +17,13 @@ import { codeBlock, continueList, footnote, heading, indent, link, prefixLines, 
 /** Every editor currently holding unsaved text, so the page can warn on unload. */
 const dirtyEditors = new Set();
 export const unsavedCount = () => dirtyEditors.size;
+/** Other writing surfaces (the mind map) report their unsaved state here too. */
+export const setUnsaved = (key, unsaved) => {
+    if (unsaved)
+        dirtyEditors.add(key);
+    else
+        dirtyEditors.delete(key);
+};
 export function editor(options) {
     const el = keep(options.key, () => {
         const made = build(options);

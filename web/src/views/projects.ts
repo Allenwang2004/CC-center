@@ -7,6 +7,7 @@
  * two kinds of truth apart: a project is what you have to say about it.
  */
 
+import { board } from "../ui/board.js";
 import { editor } from "../ui/editor/editor.js";
 import { h, mount, sticky } from "../ui/dom.js";
 import {
@@ -254,6 +255,25 @@ function journalShelf(g: Group, byDay: Map<string, Row[]>): HTMLElement {
       h("div", { class: "note-open journal-open" }, head, journalBox(g, current))));
 }
 
+/**
+ * The mind map sits above the words: it is the high-level thinking the notes
+ * and the journal then spell out. One canvas per project, stored as one row;
+ * if two machines each started one, the newest wins and the other stays put.
+ */
+function boardShelf(g: Group): HTMLElement {
+  const saved = entriesFor(g.cwd, "mindmap")
+    .sort((a, b) => b.ref.localeCompare(a.ref))[0] ?? null;
+  const b = board({
+    cwd: g.cwd,
+    host: saved?.host || g.host,
+    ref: saved?.ref ?? "",
+    saved: saved?.body ?? "",
+    updatedAt: saved?.updated_at ?? null,
+  });
+  b.sync(saved?.body ?? "", saved?.ref ?? "", saved?.updated_at ?? null);
+  return b.el;
+}
+
 /* -- the pane ------------------------------------------------------------ */
 
 /**
@@ -378,6 +398,7 @@ function projectBlock(g: Group): HTMLElement {
       g.notes.length ? h("span", { class: "tag" }, plural(g.notes.length, "note")) : null,
       missing && h("span", { class: "tag gone" }, "folder is gone"),
       h("code", { class: "project-path", title: g.cwd }, g.cwd)),
+    missing ? null : boardShelf(g),
     missing ? null : noteShelf(g),
     journalShelf(g, byDay),
     loose);

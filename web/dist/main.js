@@ -212,6 +212,9 @@ function bind() {
                 target.blur();
             return;
         }
+        // The mind map has its own keys (digits pick tools, R is rectangle...).
+        if (target.closest(".board"))
+            return;
         if (e.key === "r" || e.key === "R") {
             void api.refresh();
             toast("Collecting");

@@ -15,6 +15,7 @@ export const store = {
     openDays: new Set(),
     openNote: new Map(),
     openJournal: new Map(),
+    openBoards: new Set(),
 };
 export function adopt(state) {
     store.settings = state.settings;

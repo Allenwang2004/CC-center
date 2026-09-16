@@ -2,9 +2,9 @@
 --
 -- Run this once in the Supabase dashboard (SQL Editor); it is safe to run
 -- again after an update. Everything computed from transcripts stays on your
--- machines; only journal entries and notes live here, one row each, scoped
--- to the account that wrote them -- plus the pictures pasted into a journal
--- entry, in a private storage bucket at the bottom of this file.
+-- machines; only journal entries, notes and mind maps live here, one row each,
+-- scoped to the account that wrote them -- plus the pictures pasted into a
+-- journal entry, in a private storage bucket at the bottom of this file.
 --
 -- The unique key mirrors the local cache (kind, cwd, host, ref), so a row
 -- written on one machine lands in the same place when another machine pulls.
@@ -12,7 +12,7 @@
 create table if not exists public.entries (
     id          uuid primary key default gen_random_uuid(),
     user_id     uuid not null default auth.uid() references auth.users (id) on delete cascade,
-    kind        text not null check (kind in ('journal', 'note')),
+    kind        text not null check (kind in ('journal', 'note', 'mindmap')),
     cwd         text not null,                       -- 專案路徑
     host        text not null,                       -- 專案在哪台機器
     ref         text not null,                       -- journal: YYYY-MM-DD; note: YYYY-MM-DD-HHMM[-n]
@@ -57,6 +57,16 @@ create policy "entries: own rows"
     with check (user_id = auth.uid());
 
 grant select, insert, update, delete on public.entries to authenticated;
+
+-- A project that ran the first version of this file has the two-value check;
+-- widen it so a mind map can be stored (one row per project, kind 'mindmap').
+-- One block, so the drop and the add cannot be run apart from each other.
+do $$
+begin
+    alter table public.entries drop constraint if exists entries_kind_check;
+    alter table public.entries
+        add constraint entries_kind_check check (kind in ('journal', 'note', 'mindmap'));
+end $$;
 
 -- Pictures pasted into a journal entry. The bucket is private: nothing in it
 -- has a public URL. An account reaches the folder named after its own id and

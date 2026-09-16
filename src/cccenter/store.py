@@ -35,7 +35,7 @@ from .entries import JOURNAL_DIR, NOTE_DIR
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS entries (
     id           INTEGER PRIMARY KEY,
-    kind         TEXT NOT NULL,             -- 'journal' | 'note'
+    kind         TEXT NOT NULL,             -- 'journal' | 'note' | 'mindmap'
     cwd          TEXT NOT NULL,             -- 專案路徑
     host         TEXT NOT NULL,             -- 專案在哪台機器
     ref          TEXT NOT NULL,             -- journal: YYYY-MM-DD; note: YYYY-MM-DD-HHMM[-n]
@@ -101,12 +101,13 @@ def _now():
 
 
 def validate(kind, ref):
-    if kind == "journal" and not DAY_REF.match(ref or ""):
-        raise ValueError(f"a journal ref must look like YYYY-MM-DD, got {ref!r}")
+    # 一個專案一張心智圖: ref 是它建立的那天, 之後一直存回同一列
+    if kind in ("journal", "mindmap") and not DAY_REF.match(ref or ""):
+        raise ValueError(f"a {kind} ref must look like YYYY-MM-DD, got {ref!r}")
     if kind == "note" and not NOTE_REF.match(ref or ""):
         raise ValueError(f"a note ref must look like YYYY-MM-DD-HHMM, got {ref!r}")
-    if kind not in ("journal", "note"):
-        raise ValueError(f"kind must be journal or note, got {kind!r}")
+    if kind not in ("journal", "note", "mindmap"):
+        raise ValueError(f"kind must be journal, note or mindmap, got {kind!r}")
 
 
 def put(kind, cwd, host, ref, body, day=None, title=None, cloud=None):

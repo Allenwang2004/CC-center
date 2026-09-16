@@ -1094,6 +1094,59 @@ html, body {
 
 .journal .editor { border-left: 2px solid var(--rule-firm); }
 
+/* -- mind map ----------------------------------------------------------- */
+
+/*
+ * A <details> like the project itself: folded, it is one line; open, it is
+ * the canvas. Excalidraw fills whatever box it is given, so the box is the
+ * only thing sized here.
+ */
+.board { margin-top: 6px; }
+.board > summary { cursor: pointer; list-style: none; }
+.board > summary::-webkit-details-marker { display: none; }
+.board > summary h4 { display: flex; align-items: baseline; gap: 8px; margin: 0; }
+.board > summary h4::before {
+  content: "\25B8";
+  font-size: 10px;
+  color: var(--ink-3);
+  transition: transform 0.12s ease;
+}
+.board[open] > summary h4::before { transform: rotate(90deg); }
+.board-bar { display: none; padding: 4px 0 6px; }
+.board[open] .board-bar { display: flex; }
+.board-host {
+  position: relative;
+  height: 560px;
+  border: 1px solid var(--rule);
+  border-left: 2px solid var(--rule-firm);
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--raised);
+}
+.board.is-dirty .board-host { border-color: var(--rule-firm); }
+.board-canvas { position: absolute; inset: 0; }
+.board-loading { position: absolute; inset: 0; margin: 0; display: grid; place-items: center; font-size: 12px; }
+.board-loading.failed { color: var(--removed); padding: 0 24px; text-align: center; }
+/* Filling the window: the canvas becomes the page until Shrink or Escape. */
+.board.is-expanded .board-host {
+  position: fixed;
+  inset: 0;
+  height: auto;
+  z-index: 50;
+  border: 0;
+  border-radius: 0;
+}
+.board.is-expanded .board-bar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 51;
+  padding: 6px 12px;
+  background: var(--raised);
+  border-bottom-left-radius: 6px;
+}
+body.has-board-expanded { overflow: hidden; }
+
 /* The journal borrows the notes layout: days down the left, one day open. */
 .journal-item { grid-template-columns: 10px 1fr auto; }
 .journal-dot {

@@ -9,7 +9,9 @@ nothing else does, and you get told. If only the Markdown copy fails --- the
 folder is gone, the machine is unreachable --- what you wrote is still saved.
 
 A journal entry stays out of the project folder. It is written by a machine
-every morning and belongs to the account, not to the repo.
+every morning and belongs to the account, not to the repo. So does the mind
+map: one per project, its body the canvas as Excalidraw JSON, saved back to
+the same row (the day it was first drawn) every time.
 
 The journal Claude writes every morning (`app/journal.py`) comes through the same
 `save`, so there is exactly one way an entry reaches the cloud and the cache.
@@ -76,12 +78,12 @@ class Writer:
             raise ValueError("a project path is required")
         if kind == "note" and not ident:
             ident = store.next_note_ref(cwd, host)
-        if kind == "journal" and not ident:
-            raise ValueError("a journal entry needs a date")
+        if kind in ("journal", "mindmap") and not ident:
+            raise ValueError(f"a {kind} entry needs a date")
         store.validate(kind, ident)
-        # journal 的標題就是日期, 不吃傳進來的 title
+        # journal 的標題就是日期, 心智圖沒有標題: 都不吃傳進來的 title
         row = sync.save_entry(self.cloud, kind, cwd, host, ident, text or "",
-                              title=None if kind == "journal" else title) or {}
+                              title=title if kind == "note" else None) or {}
 
         path, warn = None, None
         if kind == "note":

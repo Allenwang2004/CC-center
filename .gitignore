@@ -9,3 +9,6 @@ node_modules/
 
 # 你自己的內容 —— 存在 ~/.cc-center 跟各專案的 journal/ note/ 底下,
 # 不屬於這個 repo。web/dist/ 是刻意進版控的: 沒有它就得先 npm install 才能跑。
+
+# Playwright MCP 的截圖跟 log (測試時產生的)
+.playwright-mcp/

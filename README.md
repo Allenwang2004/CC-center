@@ -37,8 +37,15 @@ journal entries.
   mechanism (a pipeline, an integration, a fix), every term explained the
   first time, the steps in the order the system runs them, each tied to the
   file or command that does it, and how to check it really works that way.
-  You add your own words on top. Both are stored in Supabase under your
-  account, cached locally, and the page works offline for reading.
+  You add your own words on top, and paste screenshots into it. Both are
+  stored in Supabase under your account, cached locally, and the page works
+  offline for reading. The editor is Markdown the HackMD way: highlight,
+  footnotes, `$math$` (KaTeX), `:::spoiler` folds and `:::info` boxes, a
+  `[TOC]`, coloured code with a Copy button, and an outline down the side of
+  the preview.
+- **A mind map per project.** An Excalidraw canvas at the top of each project,
+  the whole of Excalidraw (the real package, bundled in, no network), saved to
+  the same account as one `.excalidraw` document when you say so.
 - **Your CLAUDE.md files.** The global `~/.claude/CLAUDE.md` on every machine and
   each project's `.claude/CLAUDE.md`, edited in place where Claude Code reads
   them; a project without one gets a Create button.

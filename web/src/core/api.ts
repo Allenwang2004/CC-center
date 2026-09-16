@@ -100,7 +100,7 @@ export const api = {
   saveClaudeFile: (input: { host: string; cwd: string | null; text: string }) =>
     call<{ ok: true; path: string }>("/api/claudemd", input),
   saveEntry: (input: {
-    kind: "journal" | "note";
+    kind: "journal" | "note" | "mindmap";
     cwd: string;
     id: string;
     host: string;

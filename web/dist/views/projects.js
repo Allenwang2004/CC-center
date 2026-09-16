@@ -6,6 +6,7 @@
  * landed in a commit -- lives under Sessions. Splitting it this way keeps the
  * two kinds of truth apart: a project is what you have to say about it.
  */
+import { board } from "../ui/board.js";
 import { editor } from "../ui/editor/editor.js";
 import { h, mount, sticky } from "../ui/dom.js";
 import { basename, clock, count, dayLabel, duration, firstLine, plural, refClock, todayKey, } from "../core/format.js";
@@ -186,6 +187,24 @@ function journalShelf(g, byDay) {
         : " · not written yet"));
     return h("section", { class: "shelf journal" }, h("h4", null, "Journal", h("span", { class: "muted" }, `${plural(written.size, "day")} written`)), h("div", { class: "note-pane journal-pane" }, h("div", { class: "note-index journal-index" }, index), h("div", { class: "note-open journal-open" }, head, journalBox(g, current))));
 }
+/**
+ * The mind map sits above the words: it is the high-level thinking the notes
+ * and the journal then spell out. One canvas per project, stored as one row;
+ * if two machines each started one, the newest wins and the other stays put.
+ */
+function boardShelf(g) {
+    const saved = entriesFor(g.cwd, "mindmap")
+        .sort((a, b) => b.ref.localeCompare(a.ref))[0] ?? null;
+    const b = board({
+        cwd: g.cwd,
+        host: saved?.host || g.host,
+        ref: saved?.ref ?? "",
+        saved: saved?.body ?? "",
+        updatedAt: saved?.updated_at ?? null,
+    });
+    b.sync(saved?.body ?? "", saved?.ref ?? "", saved?.updated_at ?? null);
+    return b.el;
+}
 /* -- the pane ------------------------------------------------------------ */
 /**
  * Rebuilding the pane detaches every node in it, and detaching a focused
@@ -266,7 +285,7 @@ function projectBlock(g) {
     const block = sticky(store.openProjects, g.cwd, { class: "project", open: g.rows.length > 0 }, h("summary", { class: "project-head" }, h("h2", null, basename(g.cwd)), g.branch && h("span", { class: "tag" }, g.branch), [...g.hosts].filter((x) => x && x !== store.localHost)
         .map((x) => h("span", { class: "tag remote" }, x)), g.rows.length
         ? h("span", { class: "tag" }, `${asked(g.rows)} asked`)
-        : h("span", { class: "tag quiet" }, "quiet in this range"), (added || removed) && h("span", { class: "delta" }, h("span", { class: "plus" }, `+${count(added)}`), h("span", { class: "minus" }, `−${count(removed)}`)), commits ? h("span", { class: "tag" }, plural(commits, "commit")) : null, g.notes.length ? h("span", { class: "tag" }, plural(g.notes.length, "note")) : null, missing && h("span", { class: "tag gone" }, "folder is gone"), h("code", { class: "project-path", title: g.cwd }, g.cwd)), missing ? null : noteShelf(g), journalShelf(g, byDay), loose);
+        : h("span", { class: "tag quiet" }, "quiet in this range"), (added || removed) && h("span", { class: "delta" }, h("span", { class: "plus" }, `+${count(added)}`), h("span", { class: "minus" }, `−${count(removed)}`)), commits ? h("span", { class: "tag" }, plural(commits, "commit")) : null, g.notes.length ? h("span", { class: "tag" }, plural(g.notes.length, "note")) : null, missing && h("span", { class: "tag gone" }, "folder is gone"), h("code", { class: "project-path", title: g.cwd }, g.cwd)), missing ? null : boardShelf(g), missing ? null : noteShelf(g), journalShelf(g, byDay), loose);
     return block;
 }
 export function projectNames() {

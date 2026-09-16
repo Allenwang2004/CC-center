@@ -462,6 +462,29 @@ console.log("journal save    :", JSON.stringify(journalSaves));
   if (noteArea.value !== before) errors.push("a note accepted a pasted image");
 }
 
+/*
+ * The mind map: one folded block at the top of every project, above the
+ * notes. Folded, it costs nothing; opening it is what loads Excalidraw, which
+ * jsdom cannot run -- so what is checked here is the shape and that opening
+ * fails softly (a message in the block, never a page error).
+ */
+{
+  const blocks = [...d.querySelectorAll("details.project")];
+  const boards = blocks.map((b) => b.querySelector("details.board"));
+  const atTop = boards.every((b) => b && b.previousElementSibling?.tagName === "SUMMARY");
+  console.log("\nmind maps       :", boards.filter(Boolean).length, "of", blocks.length, "projects |",
+              "folded:", boards.every((b) => b && !b.open), "| at the top:", atTop);
+  if (boards.some((b) => !b)) errors.push("a project has no mind map block");
+  if (!atTop) errors.push("the mind map is not the first shelf");
+  boards[0].open = true;
+  boards[0].dispatchEvent(new window.Event("toggle"));
+  await new Promise((r) => setTimeout(r, 6000));
+  const mounted = Boolean(boards[0].querySelector(".excalidraw"));
+  const note = boards[0].querySelector(".board-loading")?.textContent ?? "";
+  console.log("mind map open   :", mounted ? "canvas mounted" : `not in jsdom: ${note.slice(0, 60)}`);
+  if (!mounted && !note.startsWith("Could not load the canvas")) errors.push("opening the mind map neither mounted nor explained");
+}
+
 console.log("\nerrors          :", errors.length ? errors : "none");
 
 process.exit(errors.length ? 1 : 0);

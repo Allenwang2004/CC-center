@@ -121,7 +121,7 @@ export interface Project {
 /** A journal entry or a note. The database is the record; markdown is a copy. */
 export interface Entry {
   id: number;
-  kind: "journal" | "note";
+  kind: "journal" | "note" | "mindmap";
   cwd: string;
   host: string;
   ref: string;
