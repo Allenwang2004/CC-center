@@ -11,6 +11,7 @@
 
 import { api } from "../../core/api.js";
 import { composing, h, keep } from "../dom.js";
+import { enhance, outline } from "./enhance.js";
 import { markdownToHtml } from "./markdown.js";
 import {
   codeBlock, continueList, footnote, heading, indent, link, prefixLines, spoiler, table,
@@ -109,10 +110,19 @@ function build(options: EditorOptions): Editor {
   let mode: Mode = "write";
 
   const preview = h("div", { class: "md-preview prose" });
+  let side: HTMLElement = h("nav", { class: "md-outline", hidden: true });
   const paintPreview = (): void => {
     if (mode === "write") return;
     preview.innerHTML = markdownToHtml(area.value)
       || '<p class="muted">Nothing to preview yet.</p>';
+    // Only the full preview has room for the outline; split is two columns already.
+    const headings = enhance(preview);
+    const next = outline(mode === "preview" ? headings : [], (id) =>
+      preview.querySelector<HTMLElement>(`#${CSS.escape(id)}`)
+        ?.scrollIntoView({ block: "start", behavior: "smooth" }));
+    side.replaceWith(next);
+    side = next;
+    root.dataset.outline = next.hidden ? "" : "1";
   };
 
   const apply = (fn: (t: string, sel: Sel) => Edit): void => {
@@ -218,7 +228,7 @@ function build(options: EditorOptions): Editor {
   const root = h("div",
     { class: `editor${options.markdown ? " is-markdown" : ""}`, data: { mode: "write" } },
     titleBox, tools,
-    h("div", { class: "md-body" }, area, preview),
+    h("div", { class: "md-body" }, area, preview, side),
     bar) as Carrier;
 
   const dirtyNow = (): boolean =>

@@ -1426,6 +1426,95 @@ button.spend-cell:hover { outline: 2px solid var(--ink-2); outline-offset: -1px;
 .prose .toc .toc-h3 { padding-left: 28px; }
 .prose .toc .toc-h4, .prose .toc .toc-h5, .prose .toc .toc-h6 { padding-left: 42px; }
 
+/* Headings carry a # that shows on hover and links to them. */
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 { position: relative; }
+.prose .anchor {
+  margin-left: 6px;
+  color: var(--ink-3);
+  text-decoration: none;
+  font-weight: 400;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.prose :is(h1, h2, h3, h4, h5, h6):hover .anchor { opacity: 1; }
+
+/* A fenced block with its Copy button in the corner. */
+.prose .code-block { position: relative; }
+.prose .code-block pre { margin: 10px 0; }
+.prose .code-copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 2px 7px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--raised);
+  color: var(--ink-3);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.prose .code-block:hover .code-copy, .prose .code-copy:focus-visible { opacity: 1; }
+.prose .code-copy:hover { color: var(--ink); }
+
+/* Once KaTeX has been through, the span is typeset text, not mono source. */
+.prose .math.is-typeset { font-family: inherit; font-size: inherit; }
+.prose .math-block.is-typeset { overflow: visible; }     /* .katex-display scrolls itself */
+.prose .math-block.is-typeset .katex-display { margin: 0; }
+
+/*
+ * highlight.js, in this page's own ink. The library only adds classes; the
+ * palette is the same handful of tokens the rest of the page paints with, so
+ * a code block reads as part of the note rather than a pasted screenshot.
+ */
+.hljs-comment, .hljs-quote { color: var(--ink-3); font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-built_in, .hljs-type, .hljs-literal, .hljs-doctag,
+.hljs-meta .hljs-keyword { color: var(--focus); }
+.hljs-string, .hljs-regexp, .hljs-addition, .hljs-attr, .hljs-selector-attr,
+.hljs-selector-pseudo, .hljs-template-tag, .hljs-template-variable { color: var(--landed); }
+.hljs-number, .hljs-symbol, .hljs-bullet, .hljs-link, .hljs-meta,
+.hljs-selector-id, .hljs-selector-class { color: var(--waiting); }
+.hljs-title, .hljs-title.function_, .hljs-title.class_, .hljs-section, .hljs-name,
+.hljs-attribute, .hljs-variable, .hljs-property { color: var(--ink); font-weight: 600; }
+.hljs-deletion { color: var(--removed); }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 700; }
+
+/* The outline: headings down the right of a full preview. */
+.md-outline {
+  display: grid;
+  gap: 2px;
+  align-content: start;
+  position: sticky;
+  top: 8px;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 11px 0 4px 12px;
+  border-left: 1px solid var(--rule);
+  font-family: var(--sans);
+  font-size: 12px;
+}
+.md-outline a {
+  color: var(--ink-2);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+.md-outline a:hover { color: var(--ink); text-decoration: underline; }
+.md-outline .outline-h1 { font-weight: 600; }
+.md-outline .outline-h2 { padding-left: 10px; }
+.md-outline .outline-h3 { padding-left: 20px; color: var(--ink-3); }
+.md-outline .outline-h4, .md-outline .outline-h5, .md-outline .outline-h6 { padding-left: 30px; color: var(--ink-3); }
+.editor[data-mode="preview"][data-outline="1"] .md-body { grid-template-columns: minmax(0, 1fr) 170px; align-items: start; }
+@media (max-width: 900px) {
+  .editor[data-mode="preview"][data-outline="1"] .md-body { grid-template-columns: 1fr; }
+  .md-outline { display: none; }
+}
+
 /* -- settings ------------------------------------------------------------ */
 
 /*

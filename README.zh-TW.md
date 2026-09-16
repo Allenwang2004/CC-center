@@ -163,6 +163,7 @@ note, journal ------------> Supabase --> 本機 SQLite 快取 --> 頁面   (寫�
 
 ```bash
 npm install && npm run build       # web/src (TypeScript) -> web/dist, 有進版控
+npm run vendor                     # highlight.js、KaTeX、Excalidraw -> web/vendor, 有進版控; 換版本才要跑
 npm run verify                     # 型別檢查、單元測試、用 jsdom 把頁面跑一遍
 python3 -m unittest discover -s tests -t .   # Python 測試; Supabase 是本機假的
 pyright
@@ -176,7 +177,8 @@ npm run install-app                # 換進 /Applications
 ```
 bin/            cc-center (報告 CLI), cc-center-app (server), cc-center-all (本機 + 遠端)
 src/cccenter/   scanner, analysis, render, entries, cloud, sync, store, cli, app/
-web/            index.html, style.css, src/ (TypeScript), dist/ (編好的, 有進版控)
+web/            index.html, style.css, src/ (TypeScript), dist/ (編好的, 有進版控),
+                vendor/ (highlight.js、KaTeX、Excalidraw, vendor.mjs 打包的, 有進版控)
 desktop/        Tauri 殼 (src-tauri/), sidecar 與打包腳本
 supabase/       schema.sql
 tests/          Python 測試, 假的 Supabase

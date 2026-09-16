@@ -10,6 +10,7 @@
  */
 import { api } from "../../core/api.js";
 import { composing, h, keep } from "../dom.js";
+import { enhance, outline } from "./enhance.js";
 import { markdownToHtml } from "./markdown.js";
 import { codeBlock, continueList, footnote, heading, indent, link, prefixLines, spoiler, table, wrap, } from "./syntax.js";
 /** Every editor currently holding unsaved text, so the page can warn on unload. */
@@ -47,11 +48,19 @@ function build(options) {
     titleBox.value = savedTitle;
     let mode = "write";
     const preview = h("div", { class: "md-preview prose" });
+    let side = h("nav", { class: "md-outline", hidden: true });
     const paintPreview = () => {
         if (mode === "write")
             return;
         preview.innerHTML = markdownToHtml(area.value)
             || '<p class="muted">Nothing to preview yet.</p>';
+        // Only the full preview has room for the outline; split is two columns already.
+        const headings = enhance(preview);
+        const next = outline(mode === "preview" ? headings : [], (id) => preview.querySelector(`#${CSS.escape(id)}`)
+            ?.scrollIntoView({ block: "start", behavior: "smooth" }));
+        side.replaceWith(next);
+        side = next;
+        root.dataset.outline = next.hidden ? "" : "1";
     };
     const apply = (fn) => {
         const sel = { start: area.selectionStart, end: area.selectionEnd };
@@ -110,7 +119,7 @@ function build(options) {
     const saveNow = h("button", { class: "btn tiny save", type: "button", hidden: true }, "Save now");
     saveNow.addEventListener("click", () => void commit());
     const bar = h("div", { class: "editor-bar" }, state, h("span", { class: "spacer" }), path, saveNow, remove);
-    const root = h("div", { class: `editor${options.markdown ? " is-markdown" : ""}`, data: { mode: "write" } }, titleBox, tools, h("div", { class: "md-body" }, area, preview), bar);
+    const root = h("div", { class: `editor${options.markdown ? " is-markdown" : ""}`, data: { mode: "write" } }, titleBox, tools, h("div", { class: "md-body" }, area, preview, side), bar);
     const dirtyNow = () => area.value !== saved || (!!options.withTitle && titleBox.value !== savedTitle);
     function paint() {
         const blank = isComposer || (!saved && !savedTitle);

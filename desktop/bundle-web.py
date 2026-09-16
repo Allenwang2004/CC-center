@@ -27,6 +27,7 @@ def main() -> None:
     shutil.copy2(WEB / "style.css", static / "style.css")
     shutil.copytree(WEB / "dist", static / "dist",
                     ignore=shutil.ignore_patterns("*.map", "*.tsbuildinfo"))
+    shutil.copytree(WEB / "vendor", static / "vendor")
     html = (WEB / "index.html").read_text(encoding="utf-8")
     html = (html.replace('href="/static/', 'href="static/')
                 .replace('src="/static/', 'src="static/')

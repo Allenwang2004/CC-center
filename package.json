@@ -1,19 +1,23 @@
 {
   "name": "cc-center-web",
   "version": "2.0.0",
-  "description": "The front end for cc-center. TypeScript to native ES modules, no bundler, no runtime dependencies; web/dist is committed so the tool runs with nothing installed.",
+  "description": "The front end for cc-center. TypeScript to native ES modules, no bundler, no runtime dependencies; web/dist and web/vendor are committed so the tool runs with nothing installed.",
   "type": "module",
   "private": true,
   "scripts": {
     "build": "tsc",
     "watch": "tsc --watch",
     "check": "tsc --noEmit",
+    "vendor": "node web/vendor.mjs",
     "test": "node --test web/tests/*.test.mjs",
     "smoke": "node web/tests/smoke.mjs",
     "verify": "npm run check && npm test && npm run smoke"
   },
   "devDependencies": {
+    "esbuild": "^0.28.2",
+    "highlight.js": "^11.12.0",
     "jsdom": "^29.1.1",
+    "katex": "^0.18.7",
     "typescript": "^5.9.3"
   }
 }

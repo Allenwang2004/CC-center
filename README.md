@@ -196,6 +196,7 @@ notes, journal ---------------> Supabase --> local SQLite cache --> page   (writ
 
 ```bash
 npm install && npm run build       # web/src (TypeScript) -> web/dist, committed
+npm run vendor                     # highlight.js, KaTeX, Excalidraw -> web/vendor, committed; only after a bump
 npm run verify                     # type check, unit tests, and a jsdom smoke run of the page
 python3 -m unittest discover -s tests -t .   # Python tests; Supabase is a local fake
 pyright
@@ -209,7 +210,8 @@ npm run install-app                # swap it into /Applications
 ```
 bin/            cc-center (report CLI), cc-center-app (server), cc-center-all (local + remote)
 src/cccenter/   scanner, analysis, render, entries, cloud, sync, store, cli, app/
-web/            index.html, style.css, src/ (TypeScript), dist/ (built, committed)
+web/            index.html, style.css, src/ (TypeScript), dist/ (built, committed),
+                vendor/ (highlight.js, KaTeX, Excalidraw, bundled by vendor.mjs, committed)
 desktop/        Tauri shell (src-tauri/), sidecar and bundle scripts
 supabase/       schema.sql
 tests/          Python tests, fake Supabase

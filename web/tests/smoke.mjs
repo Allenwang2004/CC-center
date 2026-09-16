@@ -379,6 +379,39 @@ console.log("journal save    :", JSON.stringify(journalSaves));
   }
 }
 
+/*
+ * The preview is more than the renderer: fences get colour and a Copy button,
+ * $..$ is typeset, headings get anchors, and a full preview with a few
+ * headings grows an outline down the side. The libraries come from
+ * web/vendor, so a stale vendor/ shows up here.
+ */
+{
+  const shelf = d.querySelector(".note-open .editor");
+  const area = shelf.querySelector("textarea.writing");
+  area.value = "# One\n\n```py\ndef f(x):\n    return x\n```\n\n## Two\n\nInline $E=mc^2$ here.\n\n## Three";
+  area.dispatchEvent(new window.Event("input", { bubbles: true }));
+  shelf.querySelector('.md-mode[data-mode="preview"]').dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 600));
+  const pv = shelf.querySelector(".md-preview");
+  const coloured = pv.querySelectorAll("code .hljs-keyword").length;
+  const typeset = pv.querySelectorAll(".math.is-typeset .katex").length;
+  const copy = pv.querySelectorAll(".code-block .code-copy").length;
+  const anchors = pv.querySelectorAll("h1 .anchor, h2 .anchor").length;
+  const outlineLinks = shelf.querySelectorAll(".md-outline a").length;
+  console.log("\npreview code    :", coloured, "keywords coloured |", copy, "copy button");
+  console.log("preview math    :", typeset, "typeset");
+  console.log("preview outline :", anchors, "anchors |", outlineLinks, "outline links |",
+              "outline shown:", shelf.dataset.outline === "1");
+  if (!coloured) errors.push("code block was not highlighted (is web/vendor/hljs.js built?)");
+  if (!typeset) errors.push("math was not typeset (is web/vendor/katex.js built?)");
+  if (copy !== 1) errors.push("code block has no Copy button");
+  if (anchors !== 3) errors.push("headings did not get anchors");
+  if (outlineLinks !== 3 || shelf.dataset.outline !== "1") errors.push("outline did not list the headings");
+  shelf.querySelector('.md-mode[data-mode="write"]').dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  area.value = "";
+  area.dispatchEvent(new window.Event("input", { bubbles: true }));
+}
+
 console.log("\nerrors          :", errors.length ? errors : "none");
 
 process.exit(errors.length ? 1 : 0);
