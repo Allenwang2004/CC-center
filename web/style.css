@@ -1466,7 +1466,8 @@ button.spend-cell:hover { outline: 2px solid var(--ink-2); outline-offset: -1px;
   overflow-y: auto;
   max-height: 460px;
 }
-.md-preview { font-size: 13.5px; max-width: none; }
+/* Rendered text sits where the typed text sat: same inset as .writing. */
+.md-preview { font-size: 13.5px; max-width: none; padding: 11px 13px 4px; }
 .md-preview > :first-child { margin-top: 0; }
 
 @media (max-width: 900px) {
@@ -1474,7 +1475,7 @@ button.spend-cell:hover { outline: 2px solid var(--ink-2); outline-offset: -1px;
   .editor[data-mode="split"] .md-preview {
     border-left: 0;
     border-top: 1px solid var(--rule);
-    padding: 12px 0 0;
+    padding: 12px 13px 4px;
   }
 }
 
