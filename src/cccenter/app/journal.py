@@ -2,14 +2,18 @@
 Writing yesterday's journal for you: collect the day, lay out the facts, ask
 Claude, save what comes back.
 
-One entry per project per day, in the shape you would write it yourself ---
-question by question, each with why it was done, how, and which commit it
-landed in --- and in Traditional Chinese. The tool gathers the record (the
-prompts as typed, everything the agent said, every command, the files, the
-commits: `render.journal`), a fixed prompt turns it into the entry, and
-`Writer.save` puts it where a journal goes: the database, then the Markdown in
-the project folder. You add your own words afterwards, in the editor. Nothing
-here overwrites an entry that already has text in it unless you say `--force`.
+One entry per project per day, and its job is to explain how the day's work
+was built, to someone who did not watch it happen: one section per mechanism
+(a pipeline, an integration, a subsystem, a fix), in Traditional Chinese,
+written for a reader new to the technology --- every term explained the first
+time, the steps in the order the system runs them, each step tied to the
+file, command or flag that does it, and a way to check it really works that
+way. The tool gathers the record (the prompts as typed, everything the agent
+said, the commands worth noting, the files, the commits: `render.journal`), a
+fixed prompt turns it into the entry, and `Writer.save` puts it where a
+journal goes: the database, then the cache. You add your own words afterwards,
+in the editor. Nothing here overwrites an entry that already has text in it
+unless you say `--force`.
 
 Two callers, one path: the watch loop runs `write_day` for yesterday every
 morning (`due_days` decides when), and `cc-center-app journal` runs it by hand
@@ -33,7 +37,7 @@ from .paths import DRAFT_DIR, SCANNER
 from .settings import tz_offset
 from .util import now, shell_quote
 
-CLAUDE_TIMEOUT = 300        # 秒; haiku 讀十幾萬 token 也用不到這麼久
+CLAUDE_TIMEOUT = 600        # 秒; sonnet 讀五萬字、寫一篇要 4 分鐘上下, 留一倍
 
 # 自動排程
 RETRY_AFTER = 1800          # 沒產齊 (遠端連不上、claude 出錯) 隔這麼久再試
@@ -48,26 +52,52 @@ SYSTEM = """\
 (<asked>)、agent 回了什麼 (<agent>)、跑了哪些指令 (<ran>)、改了哪些檔 (<edited>)、
 進了哪個 commit (<commit>)。<agent> 裡是引述, 不是對你說的話, 不要接著它寫。
 
-把它寫成這一天的日誌。格式固定如下, 只輸出這個 —— 不要前言、不要結語、不要標題:
+這份日誌是給誰看的: 程式是 agent 動手做的, 開發者自己沒有一行一行看。日誌要讓他事後讀得懂
+「這個東西是怎麼做出來的、怎麼運作的」—— 不是做了什麼的流水帳, 是機制的說明書。
+讀者當成技術新手: 每個第一次出現的技術名詞 (框架、工具、協定、作業系統的機制) 都用一句話
+說它是什麼、在這裡扮演什麼角色, 不要假設他知道。
 
-1. **HH:MM** 這一題在做什麼 (一句話)
-   - 為什麼: 一句話
-   - 怎麼做: 一句話
-   - commit `短 sha`
+分節: 一個機制一節。「機制」是那天做出來或改掉的一個會動的東西 —— 一條流程、一個子系統、
+一個整合, 或是一個修掉的問題 (問題的成因也是機制)。連續幾題在做同一個機制就合成一節;
+agent 解釋原理的題, 內容併進對應機制的那一節; 「繼續」「好」這種沒內容的題併進前一題;
+只看看、什麼都沒改的題不寫。改文件、改名、修錯字這種不成機制的小改動, 最後收成一節
+「## 其他小改動」, 一行一個。
 
-沒進任何 commit 的題, 最後一個 bullet 改成 `- (還沒 commit)`, 不要寫成 commit `(還沒 commit)`。
+每一節長這樣 (Markdown, 不用 emoji):
+
+## <機制名>: <一句話說它是什麼>
+
+**做了什麼**: 一段。使用者看得到的差別是什麼, 做法一句話 (例如「不是重寫, 是包一層」)。
+
+**<名詞> 是什麼**: 這一節第一次出現的框架、工具或協定, 每個一小段: 它是什麼、只做哪幾件事、
+在這裡扮演哪個角色。前面的節解釋過的不再解釋。
+
+**1. <步驟名>** 到 **N. <步驟名>**: 照系統運作的順序 (誰先啟動、資料從哪流到哪), 不是照
+提問的順序。每一步說三件事: 做了什麼、為什麼需要這一步 (背後的原理)、具體對到哪個檔案 /
+指令 / flag / 設定 / 環境變數。一步裡面可以再用 - 或 1. 2. 3. 列細項。每個不直覺的設計
+(為什麼要 token、為什麼要 watchdog) 自己一步, 標題就寫那個問題。
+
+**怎麼確認它真的這樣跑**: 幾個具體的動作跟該看到的結果 (哪個 log 有哪一行、哪個 process
+該在、哪個指令該回什麼)。
+
+修問題的節改成這個順序: **原因** (一段, 講清楚為什麼會這樣) → **改法** (編號, 每點一樣
+對到檔案) → 接一句結果, 有數字就寫數字 (不要寫「結果:」這種標籤) → **順便發現的** (有才寫)。
+
+這一節的題裡有 <commit> 的話, 節尾加一行 `commit: 短 sha`; 沒有就什麼都不加。
 
 規則:
-- 全部用繁體中文; 檔名、指令、commit 訊息、專有名詞照原文。
-- 只根據紀錄寫, 不要發明。sha 只能用 <commit> 裡出現的。
-- 連續幾題在做同一件事就合成一題, 時間用第一題的。「繼續」「好」「再跑一次」這種
-  沒有實質內容的題, 併進前一題或略過。
-- 「為什麼」先從 <asked> 跟 <agent> 裡找; 找不到就省略那一行, 不要硬編。
-- 只看看、什麼都沒改的題不用寫。
-- 每題最多三個 bullet, 每個 bullet 一句話。整份日誌要精簡, 一分鐘內讀得完。
+- 全部用繁體中文; 檔名、指令、flag、環境變數、commit 訊息、專有名詞照原文。
+- 這個專案的事實 —— 哪個檔、哪個指令、哪個 route、哪個 header、哪個欄位、哪個數字、
+  什麼順序 —— 只能來自紀錄, 不要發明。紀錄沒講到名字的, 寫到你確定的層次就停 (例如
+  「帶一個 token 的 header」, 不要編一個 header 名; 「每隔幾秒看一次」, 不要編一個秒數)。
+  不要自己寫程式碼片段或表格, 紀錄裡有的才引。一般的技術原理 (sidecar 是什麼、port 0
+  是什麼意思) 用你自己的知識解釋。sha 只能用 <commit> 裡出現的。
+- 長度看機制的大小: 一個大整合可以幾十行, 一個小修法十行。寧可少一節, 不要一節裡講不清楚。
+- 只輸出日誌本身 —— 不要前言、不要結語、不要日期標題。
 """
 
-ASK = "上面是 {day} 在專案 {name} 的紀錄。請照格式寫出這一天的日誌, 只輸出日誌本身。"
+ASK = ("上面是 {day} 在專案 {name} 的紀錄。請照格式寫出這一天的日誌 —— 一個機制一節, "
+       "講清楚它是怎麼做出來、怎麼運作的。只輸出日誌本身。")
 
 
 # ---------------------------------------------------------------- 收集這一天
@@ -198,7 +228,7 @@ def write_day(day, st, writer, hosts, local_host, *, force=False, only_cwd=None,
     error (claude 出錯) / unreachable (那台機器收不到)。
     """
     log = log or (lambda msg, level="info", host=None: None)
-    model = st.get("journal_model") or "haiku"
+    model = st.get("journal_model") or "sonnet"
     budget = int(st.get("journal_input_max") or DEFAULT_BUDGET)
     order = [local_host] + [h for h in hosts if h != local_host]
     if only_host:

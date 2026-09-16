@@ -33,9 +33,12 @@ journal entries.
   limits from Claude Code's status line.
 - **Notes and a daily journal.** Notes are yours, one file per thought. The
   journal is written for you every morning by `claude -p` from the day's full
-  record (why, how, which commit), and you add your own words on top. Both are
-  stored in Supabase under your account, cached locally, and the page works
-  offline for reading.
+  record, and it explains how the day's work was built: one section per
+  mechanism (a pipeline, an integration, a fix), every term explained the
+  first time, the steps in the order the system runs them, each tied to the
+  file or command that does it, and how to check it really works that way.
+  You add your own words on top. Both are stored in Supabase under your
+  account, cached locally, and the page works offline for reading.
 - **Your CLAUDE.md files.** The global `~/.claude/CLAUDE.md` on every machine and
   each project's `.claude/CLAUDE.md`, edited in place where Claude Code reads
   them; a project without one gets a Create button.

@@ -198,15 +198,15 @@ SUPABASE_ANON_KEY=...</pre>
         <section class="setting-group">
           <header>
             <h2>Journal</h2>
-            <p>Every morning, Claude writes yesterday's entry for each project you asked something in: question by question, why, how, which commit. You add your own words afterwards; a day you have saved on is never rewritten.</p>
+            <p>Every morning, Claude writes yesterday's entry for each project you asked something in: how the day's work was built, one section per mechanism, each step tied to the file or command that does it. You add your own words afterwards; a day you have saved on is never rewritten.</p>
           </header>
           <div class="setting-fields">
             <label class="check"><input type="checkbox" id="journal_auto"> Write yesterday's journal automatically</label>
             <p id="journal-no-claude" class="hint" hidden><code>claude</code> is not on this machine's PATH, so nothing can be written until it is.</p>
             <label class="field-row"><span>After</span><input type="text" id="journal_at" placeholder="06:00" pattern="[0-2][0-9]:[0-5][0-9]"></label>
             <p class="hint">Local time. Not a moment but a threshold: if the machine was asleep, it catches up on the next pass, back to three days.</p>
-            <label class="field-row"><span>Model</span><input type="text" id="journal_model" placeholder="haiku"></label>
-            <p class="hint">Passed to <code>claude -p --model</code>. A day's record runs to tens of thousands of tokens, so the cheap one is the default. By hand, any day: <code>bin/cc-center-app journal --date YYYY-MM-DD</code></p>
+            <label class="field-row"><span>Model</span><input type="text" id="journal_model" placeholder="sonnet"></label>
+            <p class="hint">Passed to <code>claude -p --model</code>. The entry explains how things were built, and the small model fills gaps in the record with guesses, so sonnet is the default. By hand, any day: <code>bin/cc-center-app journal --date YYYY-MM-DD</code></p>
           </div>
         </section>
 

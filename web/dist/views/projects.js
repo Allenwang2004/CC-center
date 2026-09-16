@@ -122,8 +122,9 @@ function noteShelf(g) {
 }
 /**
  * The journal is the other half of the record. Every morning the watcher has
- * Claude write yesterday's entry from the full transcript --- question by
- * question, why, how, which commit --- and it lands here as saved text. What
+ * Claude write yesterday's entry from the full transcript --- how the day's
+ * work was built, one section per mechanism --- and it lands here as saved
+ * text. What
  * you add on top is ordinary editing; once you save, the entry is yours and
  * the morning run leaves it alone.
  */

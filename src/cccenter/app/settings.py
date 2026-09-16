@@ -77,7 +77,7 @@ DEFAULT_SETTINGS = {
     # 每天早上自動把昨天的 journal 寫好 (app/journal.py)
     "journal_auto": True,
     "journal_at": "06:00",             # 本機時間過了這一刻、還沒產齊就跑 (睡醒補)
-    "journal_model": "haiku",          # claude -p --model; 空的 = claude 自己的預設
+    "journal_model": "sonnet",         # claude -p --model; 空的 = claude 自己的預設。haiku 會把沒寫在紀錄裡的細節編出來
     "journal_input_max": 200000,       # 餵給 claude 的紀錄超過這麼多字就開始縮
 }
 

@@ -30,7 +30,7 @@ class ADay(Sandbox):
         self.calls = []
         self.w = Writer("box", lambda msg, level="info", host=None: None, cloud=self.cloud())
 
-    def stub(self, text="1. **10:00** 做了一件事\n   - 怎麼做: 寫了 hello.py\n   - (還沒 commit)"):
+    def stub(self, text="## hello: 一個會打招呼的腳本\n\n**做了什麼**: 寫了 hello.py。\n"):
         def run(prompt, model, cwd=None):
             self.calls.append({"prompt": prompt, "model": model, "cwd": cwd})
             return text
@@ -99,7 +99,7 @@ class ADay(Sandbox):
         res = journal.write_day(self.day, self.st, self.w, [], "box", run=self.stub())
         self.assertEqual([r["status"] for r in res], ["written"])
         self.assertEqual(len(self.calls), 1)
-        self.assertEqual(self.calls[0]["model"], "haiku")
+        self.assertEqual(self.calls[0]["model"], "sonnet")
         self.assertTrue(self.calls[0]["prompt"].rstrip().endswith("只輸出日誌本身。"))
         row = store.get("journal", self.cwd, "box", self.day)
         self.assertIn("寫了 hello.py", row["body"])

@@ -19,7 +19,7 @@ Once it is up it stays out of your way:
   - rescans this machine when a transcript actually changes (mtime, every 12s)
   - collects the other machines over ssh on a timer (5 min, adjustable or off)
   - pushes changes to the open page, so nothing needs refreshing
-  - every morning, writes yesterday's journal for each project (claude -p, haiku)
+  - every morning, writes yesterday's journal for each project (claude -p, sonnet)
 
 Standard library only, no pip install. Binds 127.0.0.1 and nothing else, and
 every /api call needs the token the page was served with. Scanning is the same

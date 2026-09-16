@@ -29,7 +29,7 @@ import re
 
 from ..scanner import BORING_CMDS, NOTABLE_CMDS, human_time, local, oneline, parse_ts, rel
 
-# 超過這個字數就開始縮。中文一字約一個 token; 20 萬字大約 6~10 萬 token, haiku 的
+# 超過這個字數就開始縮。中文一字約一個 token; 20 萬字大約 6~10 萬 token, sonnet 的
 # 200k context 放得下, 而且離「讀到後面忘了前面」還有一段距離。
 DEFAULT_BUDGET = 200_000
 
