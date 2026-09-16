@@ -345,6 +345,40 @@ await new Promise((r) => setTimeout(r, 250));
 const journalSaves = posts.filter(([u, b]) => u.startsWith("/api/entry") && b.kind === "journal");
 console.log("journal save    :", JSON.stringify(journalSaves));
 
+/*
+ * The journal is one day at a time: a list of days down the left (today is
+ * always there), one editor on the right, and picking another day swaps the
+ * editor for that day's without losing the first one's unsaved text.
+ */
+{
+  const shelf = d.querySelector(".journal");
+  const items = [...shelf.querySelectorAll(".journal-index .journal-item")];
+  const editorsBefore = shelf.querySelectorAll("textarea.writing").length;
+  const openKey = () => shelf.querySelector(".journal-open [data-editor]")?.dataset.editor;
+  const first = openKey();
+  console.log("\njournal days    :", items.length, "| one editor open:", editorsBefore === 1,
+              "| today listed:", items.some((x) => x.textContent.includes("today")));
+  if (editorsBefore !== 1) errors.push("journal must show exactly one editor");
+  if (!items.some((x) => x.textContent.includes("today"))) errors.push("journal list has no today");
+  const other = items.find((x) => !x.classList.contains("is-on"));
+  if (other) {
+    shelf.querySelector("textarea.writing").value = "kept while away";
+    shelf.querySelector("textarea.writing").dispatchEvent(new window.Event("input", { bubbles: true }));
+    other.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 150));
+    const shelf2 = d.querySelector(".journal");
+    const second = shelf2.querySelector(".journal-open [data-editor]")?.dataset.editor;
+    console.log("journal switch  :", first, "->", second);
+    if (!second || second === first) errors.push("picking another day did not switch the journal");
+    const back = [...shelf2.querySelectorAll(".journal-item")].find((x) => !x.classList.contains("is-on"));
+    back.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 150));
+    const kept = d.querySelector(".journal textarea.writing").value === "kept while away";
+    console.log("journal draft   :", kept ? "kept across the switch" : "LOST");
+    if (!kept) errors.push("switching days lost an unsaved journal draft");
+  }
+}
+
 console.log("\nerrors          :", errors.length ? errors : "none");
 
 process.exit(errors.length ? 1 : 0);

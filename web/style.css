@@ -1094,6 +1094,19 @@ html, body {
 
 .journal .editor { border-left: 2px solid var(--rule-firm); }
 
+/* The journal borrows the notes layout: days down the left, one day open. */
+.journal-item { grid-template-columns: 10px 1fr auto; }
+.journal-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1px solid var(--ink-3);
+  align-self: center;
+}
+.journal-dot.is-written { background: var(--landed); border-color: var(--landed); }
+.journal-item .note-item-title { display: flex; align-items: baseline; gap: 6px; }
+.journal-open .day-head { margin: 0 0 8px; }
+
 /* -- sessions ------------------------------------------------------------ */
 
 .session-group { margin: 12px 0 18px; }

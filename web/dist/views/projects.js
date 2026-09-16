@@ -124,9 +124,8 @@ function noteShelf(g) {
  * The journal is the other half of the record. Every morning the watcher has
  * Claude write yesterday's entry from the full transcript --- how the day's
  * work was built, one section per mechanism --- and it lands here as saved
- * text. What
- * you add on top is ordinary editing; once you save, the entry is yours and
- * the morning run leaves it alone.
+ * text. What you add on top is ordinary editing; once you save, the entry is
+ * yours and the morning run leaves it alone.
  */
 function journalBox(g, day) {
     const saved = entriesFor(g.cwd, "journal").find((e) => e.ref === day);
@@ -143,10 +142,47 @@ function journalBox(g, day) {
             + "`cc-center-app journal --date " + day + "`. Add your own words on top.",
     });
     ed.sync(saved?.body ?? "");
+    return ed.el;
+}
+/**
+ * One day at a time. The journal used to be a stack of every day in the
+ * range, each with its own editor, which made the pane a scroll of mostly
+ * empty boxes. Now it works like the notes: a list of days down the left, the
+ * one you picked open on the right. The list holds every day you asked
+ * something in this range, every day that already has an entry (whatever the
+ * range), and today; a dot marks the days with words in them.
+ */
+function journalShelf(g, byDay) {
+    const today = todayKey();
+    const written = new Map(entriesFor(g.cwd, "journal").map((e) => [e.ref, e]));
+    const days = [...new Set([today, ...byDay.keys(), ...written.keys()])]
+        .sort((a, b) => b.localeCompare(a));
+    const stored = store.openJournal.get(g.cwd);
+    const current = stored && days.includes(stored) ? stored : (days[0] ?? today);
+    const rows = byDay.get(current) ?? [];
+    const saved = written.get(current);
+    const ch = changesFor(g.cwd, current);
+    const select = (day) => {
+        store.openJournal.set(g.cwd, day);
+        const pane = document.getElementById("pane-projects-body");
+        if (pane)
+            renderProjects(pane);
+    };
+    const index = days.map((day) => {
+        const on = day === current;
+        const entry = written.get(day);
+        const n = asked(byDay.get(day) ?? []);
+        const item = h("button", { class: `note-item journal-item${on ? " is-on" : ""}`, type: "button",
+            aria: { current: on ? "true" : "false" } }, h("span", { class: `journal-dot${entry?.body.trim() ? " is-written" : ""}` }), h("span", { class: "note-item-title" }, dayLabel(day), day === today && h("span", { class: "tag now" }, "today")), h("span", { class: "note-item-date" }, n ? `${n} asked` : ""));
+        item.addEventListener("click", () => select(day));
+        return item;
+    });
     // A journal entry lives in the account, not in the project folder, so the
     // header names when it was last saved rather than a file.
-    return h("section", { class: "shelf journal" }, h("h4", null, "Journal", h("span", { class: "muted" }, saved?.updated_at ? `saved ${clock(saved.updated_at)} · ${saved.updated_at.slice(0, 10)}`
-        : "not written yet")), ed.el);
+    const head = h("header", { class: "day-head" }, h("h3", null, dayLabel(current)), current === today && h("span", { class: "tag now" }, "today"), h("span", { class: "muted" }, asked(rows) ? `${asked(rows)} asked` : "nothing asked", ch && ch.active ? ` · ${duration(ch.active)}` : "", saved?.updated_at
+        ? ` · saved ${clock(saved.updated_at)} · ${saved.updated_at.slice(0, 10)}`
+        : " · not written yet"));
+    return h("section", { class: "shelf journal" }, h("h4", null, "Journal", h("span", { class: "muted" }, `${plural(written.size, "day")} written`)), h("div", { class: "note-pane journal-pane" }, h("div", { class: "note-index journal-index" }, index), h("div", { class: "note-open journal-open" }, head, journalBox(g, current))));
 }
 /* -- the pane ------------------------------------------------------------ */
 /**
@@ -205,28 +241,19 @@ export function renderProjects(host) {
         mount(host, h("div", { class: "empty" }, h("h3", null, "No projects yet"), h("p", null, "Run Claude Code somewhere and it will show up here.")));
         return;
     }
-    mount(host, groups.map((g) => projectBlock(g, q)));
+    mount(host, groups.map((g) => projectBlock(g)));
 }
-function projectBlock(g, query) {
+function projectBlock(g) {
     const byDay = new Map();
     for (const r of g.rows) {
         const list = byDay.get(r.day) ?? [];
         list.push(r);
         byDay.set(r.day, list);
     }
-    const today = todayKey();
-    if (!byDay.has(today) && !query && !store.projectFilters.changedOnly)
-        byDay.set(today, []);
     const commits = g.rows.reduce((a, r) => a + r.turn.commits.length, 0);
     const added = g.rows.reduce((a, r) => a + Object.values(r.turn.files).reduce((x, s) => x + s.a, 0), 0);
     const removed = g.rows.reduce((a, r) => a + Object.values(r.turn.files).reduce((x, s) => x + s.d, 0), 0);
     const missing = g.meta && !g.meta.exists;
-    const days = [...byDay.entries()]
-        .sort((a, b) => b[0].localeCompare(a[0]))
-        .map(([day, rows]) => {
-        const ch = changesFor(g.cwd, day);
-        return h("section", { class: "day" }, h("header", { class: "day-head" }, h("h3", null, dayLabel(day)), day === today && h("span", { class: "tag now" }, "today"), h("span", { class: "muted" }, asked(rows) ? `${asked(rows)} asked` : "nothing asked", ch && ch.active ? ` · ${duration(ch.active)}` : "")), journalBox(g, day));
-    });
     const loose = g.loose.length
         ? h("section", { class: "day" }, h("header", { class: "day-head" }, h("h3", null, "Commits with no question behind them"), h("span", { class: "muted" }, "made by hand, or outside the agent")), h("div", { class: "ledger" }, [...g.loose]
             .sort((a, b) => (b.at ?? "").localeCompare(a.at ?? ""))
@@ -237,7 +264,7 @@ function projectBlock(g, query) {
     const block = sticky(store.openProjects, g.cwd, { class: "project", open: g.rows.length > 0 }, h("summary", { class: "project-head" }, h("h2", null, basename(g.cwd)), g.branch && h("span", { class: "tag" }, g.branch), [...g.hosts].filter((x) => x && x !== store.localHost)
         .map((x) => h("span", { class: "tag remote" }, x)), g.rows.length
         ? h("span", { class: "tag" }, `${asked(g.rows)} asked`)
-        : h("span", { class: "tag quiet" }, "quiet in this range"), (added || removed) && h("span", { class: "delta" }, h("span", { class: "plus" }, `+${count(added)}`), h("span", { class: "minus" }, `−${count(removed)}`)), commits ? h("span", { class: "tag" }, plural(commits, "commit")) : null, g.notes.length ? h("span", { class: "tag" }, plural(g.notes.length, "note")) : null, missing && h("span", { class: "tag gone" }, "folder is gone"), h("code", { class: "project-path", title: g.cwd }, g.cwd)), missing ? null : noteShelf(g), days, loose);
+        : h("span", { class: "tag quiet" }, "quiet in this range"), (added || removed) && h("span", { class: "delta" }, h("span", { class: "plus" }, `+${count(added)}`), h("span", { class: "minus" }, `−${count(removed)}`)), commits ? h("span", { class: "tag" }, plural(commits, "commit")) : null, g.notes.length ? h("span", { class: "tag" }, plural(g.notes.length, "note")) : null, missing && h("span", { class: "tag gone" }, "folder is gone"), h("code", { class: "project-path", title: g.cwd }, g.cwd)), missing ? null : noteShelf(g), journalShelf(g, byDay), loose);
     return block;
 }
 export function projectNames() {
