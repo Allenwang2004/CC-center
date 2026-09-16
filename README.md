@@ -105,8 +105,9 @@ key. The Mac app has the project baked in at build time.
 To run your own project instead, three steps once:
 
 1. Create a project and run `supabase/schema.sql` in the SQL Editor. It creates
-   one table, `entries`, with row level security so every account only sees its
-   own rows.
+   one table, `entries`, and one private storage bucket, `cc-images`, for the
+   pictures in a journal entry, with row level security so every account only
+   sees its own rows and its own folder. Safe to run again after an update.
 2. Sign-in is by email and a code. Supabase only lets you edit email templates
    with a custom SMTP server configured (Project Settings, Authentication, SMTP
    Settings), so set one up, then add `{{ .Token }}` to both the **Confirm

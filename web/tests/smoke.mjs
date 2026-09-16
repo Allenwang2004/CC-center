@@ -42,6 +42,8 @@ globalThis.HTMLInputElement = window.HTMLInputElement;
 globalThis.HTMLSelectElement = window.HTMLSelectElement;
 globalThis.HTMLDetailsElement = window.HTMLDetailsElement;
 globalThis.Node = window.Node;
+globalThis.FileReader = window.FileReader;
+globalThis.File = window.File;
 globalThis.CSS = window.CSS ?? { escape: (s) => s.replace(/["\\]/g, "\\$&") };
 globalThis.getComputedStyle = window.getComputedStyle.bind(window);
 window.CC_TOKEN = "test";
@@ -55,6 +57,10 @@ const CLAUDE_FILES = { local_host: state.local_host, files: [
     exists: false, body: "", mtime: null, error: null, last_active: 2 },
 ] };
 
+// One transparent pixel, the way the server hands a picture back.
+const PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+const IMAGE_ID = "20260917-120000-0badf00d.png";
+
 const seen = [];
 const posts = [];
 globalThis.fetch = async (url, opts) => {
@@ -64,6 +70,8 @@ globalThis.fetch = async (url, opts) => {
     String(url).startsWith("/api/state") ? state :
     String(url).startsWith("/api/report") ? report :
     String(url).startsWith("/api/claudemd") ? CLAUDE_FILES :
+    String(url).startsWith("/api/image?") ? { ok: true, type: "image/png", data: PNG_B64 } :
+    String(url) === "/api/image" ? { ok: true, id: IMAGE_ID, url: `cc://image/${IMAGE_ID}` } :
     { ok: true };
   return {
     ok: true,
@@ -410,6 +418,48 @@ console.log("journal save    :", JSON.stringify(journalSaves));
   shelf.querySelector('.md-mode[data-mode="write"]').dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
   area.value = "";
   area.dispatchEvent(new window.Event("input", { bubbles: true }));
+}
+
+/*
+ * A screenshot pasted into the journal goes up through the server and comes
+ * back as cc://image/<id> in the text; the preview then asks the server for
+ * the bytes and shows them. Notes do not take pictures at all.
+ */
+{
+  const journal = d.querySelector(".journal .editor");
+  const area = journal.querySelector("textarea.writing");
+  const png = new window.File([Uint8Array.from(Buffer.from(PNG_B64, "base64"))], "shot.png", { type: "image/png" });
+  area.value = "before ";
+  area.setSelectionRange(7, 7);
+  const paste = new window.Event("paste", { bubbles: true, cancelable: true });
+  paste.clipboardData = { files: [png], items: [] };
+  area.dispatchEvent(paste);
+  const placeholder = area.value.includes("![Uploading 1…]()");
+  await new Promise((r) => setTimeout(r, 300));
+  const upload = posts.find(([u]) => u === "/api/image");
+  console.log("\nimage paste     :", "placeholder shown:", placeholder,
+              "| uploaded:", Boolean(upload), "| text:", JSON.stringify(area.value));
+  if (!placeholder) errors.push("pasting an image did not show a placeholder");
+  if (!upload || !upload[1].data) errors.push("pasting an image did not POST /api/image");
+  if (area.value !== `before ![shot](cc://image/${IMAGE_ID})`) errors.push("upload did not replace the placeholder");
+  journal.querySelector('.md-mode[data-mode="preview"]').dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 300));
+  const img = journal.querySelector(".md-preview img.cc-image");
+  console.log("image preview   :", img ? `src ${img.getAttribute("src")?.slice(0, 22)}…` : "NO IMG",
+              "| fetched:", seen.some((u) => u.startsWith("/api/image?id=")));
+  if (!img || !img.getAttribute("src")?.startsWith("data:image/png;base64,")) errors.push("the pasted image was not resolved in the preview");
+  journal.querySelector('.md-mode[data-mode="write"]').dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  area.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+
+  const note = d.querySelector(".note-open .editor");
+  const noteArea = note.querySelector("textarea.writing");
+  const before = noteArea.value;
+  const paste2 = new window.Event("paste", { bubbles: true, cancelable: true });
+  paste2.clipboardData = { files: [png], items: [] };
+  noteArea.dispatchEvent(paste2);
+  console.log("note paste      :", noteArea.value === before ? "ignored, as it should be" : "TOOK THE IMAGE",
+              "| img button on journal only:", Boolean(journal.querySelector('.md-tool[title^="Add an image"]')) && !note.querySelector('.md-tool[title^="Add an image"]'));
+  if (noteArea.value !== before) errors.push("a note accepted a pasted image");
 }
 
 console.log("\nerrors          :", errors.length ? errors : "none");

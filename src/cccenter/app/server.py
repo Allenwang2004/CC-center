@@ -18,6 +18,8 @@ logic belongs in `monitor` or `writing`.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import mimetypes
 import os
@@ -39,6 +41,7 @@ from . import claudemd
 from .bus import BUS
 from .daemon import clear_pidfile, write_pidfile
 from .desktop import open_url
+from .images import IMAGE_DIR, ImageError, Images
 from .monitor import MON, monitor_loop, ssh_probe
 from .paths import ROOT, STATE_DIR, WEB
 from .settings import (
@@ -54,6 +57,19 @@ from .util import now
 # 帶起來的, 那把 token 就由它產生、用環境變數交進來, 它自己才打得進 /api/*。
 TOKEN = os.environ.get("CC_CENTER_TOKEN") or secrets.token_urlsafe(24)
 SERVER_STARTED = now()
+MAX_BODY = 16 * 1024 * 1024          # 一張 10 MB 的圖 base64 之後再加 JSON, 差不多這麼大
+
+_IMAGES = None
+
+
+def images() -> Images:
+    """journal 圖片的上傳與取回; 跟 MON 共用同一份登入態。"""
+    global _IMAGES
+    if _IMAGES is None:
+        _IMAGES = Images(STATE_DIR / IMAGE_DIR, MON.cloud)
+    return _IMAGES
+
+
 
 # 前端是直接從磁碟端出去的, 改了檔案就該看到新的。可是瀏覽器對 ES module 的
 # import 圖有自己的快取, 光靠 no-store 不一定重抓 —— 所以每個靜態 URL 後面都掛
@@ -114,6 +130,10 @@ class Handler(BaseHTTPRequestHandler):
         n = int(self.headers.get("Content-Length") or 0)
         if not n:
             return {}
+        if n > MAX_BODY:
+            # 不讀了; 這條連線上剩下的 bytes 沒人要, 所以回完就關掉它
+            self.close_connection = True
+            return {}
         try:
             return json.loads(self.rfile.read(n).decode("utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError):
@@ -125,6 +145,8 @@ class Handler(BaseHTTPRequestHandler):
         # EventSource 沒辦法帶 header, 所以 SSE 那條允許用 query 帶 token
         if parse_qs(urlparse(self.path).query).get("token", [None])[0] == TOKEN:
             return True
+        # 回絕時 body 還沒讀; 留在 keep-alive 連線上會被當成下一個 request 的開頭
+        self.close_connection = True
         self.send_json({"error": "bad token"}, 403)
         return False
 
@@ -186,6 +208,16 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"files": files, "local_host": MON.local_host})
         if path == "/api/live":
             return self.send_json(MON.live(st))
+        if path == "/api/image":
+            # 圖片走 JSON + base64, 不直接吐 bytes: 桌面 app 的橋只會轉文字 body
+            try:
+                ctype, data = images().get((q.get("id") or [""])[0])
+            except ImageError as e:
+                return self.send_json({"error": str(e)}, 400)
+            except CloudError as e:
+                return self.send_json({"error": str(e) or type(e).__name__}, 502)
+            return self.send_json({"ok": True, "type": ctype,
+                                   "data": base64.b64encode(data).decode("ascii")})
         if path == "/api/events":
             return self.stream()
         return self.send_json({"error": "not found"}, 404)
@@ -340,6 +372,19 @@ class Handler(BaseHTTPRequestHandler):
                     subprocess.SubprocessError, CloudError) as e:
                 return self.send_json({"error": str(e) or type(e).__name__}, 400)
             return self.send_json({"ok": True, **out})
+
+        if path == "/api/image":
+            try:
+                data = base64.b64decode(body.get("data") or "", validate=True)
+            except (binascii.Error, ValueError):
+                return self.send_json({"error": "the image is not valid base64"}, 400)
+            try:
+                name = images().save(data)
+            except ImageError as e:
+                return self.send_json({"error": str(e)}, 400)
+            except CloudError as e:
+                return self.send_json({"error": str(e) or type(e).__name__}, 502)
+            return self.send_json({"ok": True, "id": name, "url": f"cc://image/{name}"})
 
         if path == "/api/reveal":
             target = Path(os.path.expanduser(body.get("path") or ""))

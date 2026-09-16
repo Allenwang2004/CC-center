@@ -29,6 +29,7 @@ export interface Attrs {
   open?: boolean;
   spellcheck?: boolean;
   autocomplete?: string;
+  accept?: string;
   data?: Record<string, string | undefined>;
   aria?: Record<string, string | undefined>;
   on?: Partial<Record<keyof HTMLElementEventMap, (e: never) => void>>;

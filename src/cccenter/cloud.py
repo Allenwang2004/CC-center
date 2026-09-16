@@ -8,6 +8,8 @@ speaks two of Supabase's HTTP surfaces and nothing else:
 
     /auth/v1/...     sign in with an email and a six-digit code, refresh, sign out
     /rest/v1/entries the rows themselves (PostgREST), scoped by row level security
+    /storage/v1/...  the images pasted into a journal entry, in a private bucket
+                     whose policy allows an account its own folder only
 
 The browser never talks to Supabase. The local server does, on its behalf,
 which keeps the page's rule --- only ever `127.0.0.1` --- and this package's
@@ -30,6 +32,7 @@ import urllib.request
 from pathlib import Path
 
 AUTH_FILE_NAME = "auth.json"
+IMAGE_BUCKET = "cc-images"    # supabase/schema.sql 建的那個私有 bucket
 TIMEOUT = 15                  # 秒; 雲端慢就是慢, 不能把整個 server 卡住
 PAGE = 1000                   # PostgREST 一次最多給這麼多列
 REFRESH_MARGIN = 60           # access token 快到期就先換
@@ -255,26 +258,65 @@ class Cloud:
                           headers={"Prefer": "return=representation"})
         return len(data) if isinstance(data, list) else 0
 
+    # -- storage -------------------------------------------------------------
+
+    def _object_path(self, name: str) -> str:
+        """bucket 裡的路徑: <user id>/<name>。policy 只放行自己那一層資料夾。"""
+        me = self.account()
+        if not me or not me.get("id"):
+            raise NotSignedIn()
+        return f"{me['id']}/{name}"
+
+    def upload_image(self, name: str, data: bytes, content_type: str) -> str:
+        """把一張圖放進私有 bucket, 回傳它在 bucket 裡的路徑。同名不覆蓋。"""
+        path = self._object_path(name)
+        self._request("POST", f"/storage/v1/object/{IMAGE_BUCKET}/{urllib.parse.quote(path)}",
+                      data, headers={"Content-Type": content_type, "x-upsert": "false"})
+        return path
+
+    def download_image(self, name: str):
+        """(content type, bytes)。只拿得到自己上傳的。"""
+        path = self._object_path(name)
+        raw, ctype = self._request(
+            "GET", f"/storage/v1/object/authenticated/{IMAGE_BUCKET}/{urllib.parse.quote(path)}")
+        return ctype or "application/octet-stream", raw
+
     # -- HTTP ----------------------------------------------------------------
 
-    def _call(self, method, path, body=None, *, auth=True, headers=None, expect_json=True,
-              _retry=True):
+    def _call(self, method, path, body=None, *, auth=True, headers=None, expect_json=True):
+        """JSON 進 JSON 出。body 是 dict/list; 回傳 parse 好的 JSON, 空回應是 None。"""
+        data = None
+        hdrs = {"Accept": "application/json"}
+        if headers:
+            hdrs.update(headers)
+        if body is not None:
+            data = json.dumps(body, ensure_ascii=False).encode("utf-8")
+            hdrs["Content-Type"] = "application/json"
+        raw, _ctype = self._request(method, path, data, auth=auth, headers=hdrs)
+        if not expect_json or not raw.strip():
+            return None
+        try:
+            return json.loads(raw.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            raise CloudError("Supabase returned something that is not JSON") from e
+
+    def _request(self, method, path, data=None, *, auth=True, headers=None, _retry=True):
+        """一次 HTTP 往返, bytes 進 bytes 出: 回傳 (body, content type)。
+
+        401 且有登入態就換一把 token 再試一次; 還是 401 就是真的登出了。
+        """
         if not self.configured:
             raise CloudError("Supabase is not configured: set SUPABASE_URL and "
                              "SUPABASE_ANON_KEY in .env (see .env.example).")
         # 沒登入態的呼叫 (寄驗證碼、換 token) 用 anon key 當 bearer, 跟 supabase-js 一樣
-        hdrs = {"apikey": self.key, "Accept": "application/json",
+        hdrs = {"apikey": self.key,
                 "Authorization": f"Bearer {self.token() if auth else self.key}"}
         if headers:
             hdrs.update(headers)
-        data = None
-        if body is not None:
-            data = json.dumps(body, ensure_ascii=False).encode("utf-8")
-            hdrs["Content-Type"] = "application/json"
         req = urllib.request.Request(self.url + path, data=data, headers=hdrs, method=method)
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:   # noqa: S310
-                raw = resp.read()
+                return resp.read(), resp.headers.get("Content-Type")
         except urllib.error.HTTPError as e:
             try:
                 raw = e.read()
@@ -284,8 +326,8 @@ class Cloud:
                 # token 過期或被換掉: 換一把再試一次, 還是不行就是真的登出了
                 with self._lock:
                     self._refresh()
-                return self._call(method, path, body, auth=auth, headers=headers,
-                                  expect_json=expect_json, _retry=False)
+                return self._request(method, path, data, auth=auth, headers=headers,
+                                     _retry=False)
             msg = _message(raw, f"HTTP {e.code}")
             if e.code == 401 and auth:
                 raise NotSignedIn(f"Signed out: {msg}") from e
@@ -293,12 +335,6 @@ class Cloud:
         except (urllib.error.URLError, OSError, TimeoutError) as e:
             reason = getattr(e, "reason", None) or e
             raise Unreachable(f"Could not reach Supabase: {reason}") from e
-        if not expect_json or not raw.strip():
-            return None
-        try:
-            return json.loads(raw.decode("utf-8"))
-        except (json.JSONDecodeError, UnicodeDecodeError) as e:
-            raise CloudError("Supabase returned something that is not JSON") from e
 
 
 _DEFAULT = None

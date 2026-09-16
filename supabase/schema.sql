@@ -1,8 +1,10 @@
 -- cc-center: what you wrote, in Supabase.
 --
--- Run this once in the Supabase dashboard (SQL Editor). Everything computed
--- from transcripts stays on your machines; only journal entries and notes
--- live here, one row each, scoped to the account that wrote them.
+-- Run this once in the Supabase dashboard (SQL Editor); it is safe to run
+-- again after an update. Everything computed from transcripts stays on your
+-- machines; only journal entries and notes live here, one row each, scoped
+-- to the account that wrote them -- plus the pictures pasted into a journal
+-- entry, in a private storage bucket at the bottom of this file.
 --
 -- The unique key mirrors the local cache (kind, cwd, host, ref), so a row
 -- written on one machine lands in the same place when another machine pulls.
@@ -55,3 +57,23 @@ create policy "entries: own rows"
     with check (user_id = auth.uid());
 
 grant select, insert, update, delete on public.entries to authenticated;
+
+-- Pictures pasted into a journal entry. The bucket is private: nothing in it
+-- has a public URL. An account reaches the folder named after its own id and
+-- nothing else, and only ever through the local server, which signs every
+-- request with that account's token.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('cc-images', 'cc-images', false, 10485760,
+        array['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
+on conflict (id) do update
+    set public = false,
+        file_size_limit = excluded.file_size_limit,
+        allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "cc-images: own folder" on storage.objects;
+create policy "cc-images: own folder"
+    on storage.objects
+    for all
+    to authenticated
+    using (bucket_id = 'cc-images' and (storage.foldername(name))[1] = auth.uid()::text)
+    with check (bucket_id = 'cc-images' and (storage.foldername(name))[1] = auth.uid()::text);

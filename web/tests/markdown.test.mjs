@@ -111,3 +111,11 @@ test("headings carry ids and [TOC] links to them", () => {
   assert.ok(html.startsWith('<nav class="toc"><ul><li class="toc-h1"><a href="#one-two">One two</a></li>'), html);
   assert.ok(html.includes('<li class="toc-h3"><a href="#中文-標題">'), html);
 });
+
+test("a picture from the bucket is left for the server to fill in", () => {
+  const html = markdownToHtml("![shot](cc://image/20260917-120000-0badf00d.png)");
+  assert.equal(html, '<p><img class="cc-image" data-cc-image="20260917-120000-0badf00d.png" alt="shot"></p>');
+  // Anything else under cc:// is not a picture and not a link either.
+  assert.ok(!markdownToHtml("![x](cc://image/../auth.json)").includes("<img"));
+  assert.ok(!markdownToHtml("[x](cc://image/20260917-120000-0badf00d.png)").includes("<a "));
+});

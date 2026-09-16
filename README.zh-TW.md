@@ -84,8 +84,9 @@ Mac app 在建置時就把專案埋進去了。
 
 想改用自己的專案, 第一次做三件事:
 
-1. 開一個專案, 在 SQL Editor 跑一次 `supabase/schema.sql`。它建一張 `entries` 表,
-   row level security 讓每個帳號只看得到自己的列。
+1. 開一個專案, 在 SQL Editor 跑一次 `supabase/schema.sql`。它建一張 `entries` 表跟一個
+   私有的 storage bucket `cc-images` (journal 裡的圖片放這), row level security 讓每個帳號
+   只看得到自己的列、自己的資料夾。更新後再跑一次也安全。
 2. 登入是 email + 驗證碼。Supabase 要接了自己的 SMTP (Project Settings → Authentication →
    SMTP Settings) 才准改 email 樣板, 所以先設一個, 然後在 **Confirm signup** 跟
    **Magic Link** 兩個樣板都加上 `{{ .Token }}`。

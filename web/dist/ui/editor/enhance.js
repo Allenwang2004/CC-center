@@ -7,6 +7,7 @@
  * a document, and two of the steps need a library that arrives late
  * (`core/vendor.ts`), so they run after the paint and fill in as they can.
  */
+import { resolveImage } from "../../core/images.js";
 import { hljs, katex } from "../../core/vendor.js";
 import { h } from "../dom.js";
 const HEADINGS = "h1[id],h2[id],h3[id],h4[id],h5[id],h6[id]";
@@ -41,6 +42,18 @@ export function enhance(preview) {
                 el.classList.add("is-typeset");
             }
         }).catch(() => { });
+    /* pictures from the bucket: the renderer left the id, the server has the bytes */
+    for (const img of preview.querySelectorAll("img[data-cc-image]")) {
+        const id = img.dataset.ccImage ?? "";
+        img.classList.add("is-loading");
+        resolveImage(id).then((src) => {
+            img.src = src;
+            img.classList.remove("is-loading");
+        }, (err) => {
+            img.classList.replace("is-loading", "is-missing");
+            img.alt = `${img.alt || "image"} (${err instanceof Error ? err.message : "could not load"})`;
+        });
+    }
     /* headings: an anchor to hover, and the outline for the side */
     const headings = [];
     for (const hd of preview.querySelectorAll(HEADINGS)) {

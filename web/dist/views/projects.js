@@ -137,9 +137,11 @@ function journalBox(g, day) {
         ref: day,
         rows: 10,
         markdown: true,
+        images: true,
         saved: saved?.body ?? "",
         placeholder: "Written for you the next morning (Settings → Journal), or now with "
-            + "`cc-center-app journal --date " + day + "`. Add your own words on top.",
+            + "`cc-center-app journal --date " + day + "`. Add your own words on top, "
+            + "and paste or drop screenshots in.",
     });
     ed.sync(saved?.body ?? "");
     return ed.el;

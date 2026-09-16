@@ -1,6 +1,7 @@
 """
-Just enough of Supabase to test against: the auth endpoints the client uses
-and a PostgREST-shaped `entries` table, all in memory, on a local port.
+Just enough of Supabase to test against: the auth endpoints the client uses,
+a PostgREST-shaped `entries` table, and the one private storage bucket, all in
+memory, on a local port.
 
 It answers the way the real thing does where the client depends on it --- the
 shape of a session, `Prefer: resolution=...` on upsert, `limit`/`offset`
@@ -17,11 +18,14 @@ import time
 import uuid
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 ANON = "anon-key-for-tests"
 CODE = "123456"                     # 每封信都是這個碼
 USER = {"id": "11111111-1111-1111-1111-111111111111", "email": "you@example.com"}
+BUCKET = "cc-images"                # schema.sql 建的那個; 跟真的一樣, 只放行自己的資料夾
+BUCKET_LIMIT = 10 * 1024 * 1024
+BUCKET_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
 
 
 def _now():
@@ -31,6 +35,7 @@ def _now():
 class State:
     def __init__(self):
         self.rows: dict[str, dict] = {}         # id -> row
+        self.objects: dict[str, tuple] = {}     # "<bucket>/<path>" -> (content type, bytes)
         self.tokens: dict[str, dict] = {}       # access -> {user, expires}
         self.refresh: dict[str, dict] = {}      # refresh -> user
         self.emails: list[str] = []
@@ -77,12 +82,45 @@ class Handler(BaseHTTPRequestHandler):
             return None
         return t["user"]
 
+    def _storage_key(self, rest, user):
+        """/storage/v1/object/[authenticated/]<bucket>/<path> → "bucket/path", 過了 policy 才給。"""
+        bucket, _, path = unquote(rest).partition("/")
+        if bucket != BUCKET:
+            return None, self._json({"statusCode": "404", "error": "Bucket not found",
+                                     "message": "Bucket not found"}, 404)
+        if path.split("/")[0] != user["id"]:
+            return None, self._json({"statusCode": "403", "error": "Unauthorized",
+                                     "message": "new row violates row-level security policy"}, 403)
+        return f"{bucket}/{path}", None
+
     def do_POST(self):
         st = self.state
         u = urlparse(self.path)
         st.calls.append(("POST", u.path, dict(self.headers)))
         if self.headers.get("apikey") != ANON:
             return self._json({"message": "No API key found in request"}, 401)
+        if u.path.startswith("/storage/v1/object/"):
+            user = self._user()
+            if not user:
+                return self._json({"statusCode": "401", "message": "invalid JWT"}, 401)
+            n = int(self.headers.get("Content-Length") or 0)
+            raw = self.rfile.read(n) if n else b""
+            key, err = self._storage_key(u.path[len("/storage/v1/object/"):], user)
+            if err is not None:
+                return err
+            ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip()
+            if ctype not in BUCKET_TYPES:
+                return self._json({"statusCode": "415", "error": "invalid_mime_type",
+                                   "message": f"mime type {ctype} is not supported"}, 415)
+            if len(raw) > BUCKET_LIMIT:
+                return self._json({"statusCode": "413", "error": "Payload too large",
+                                   "message": "The object exceeded the maximum allowed size"}, 413)
+            with st.lock:
+                if key in st.objects and self.headers.get("x-upsert", "false") != "true":
+                    return self._json({"statusCode": "409", "error": "Duplicate",
+                                       "message": "The resource already exists"}, 409)
+                st.objects[key] = (ctype, raw)
+            return self._json({"Key": key, "Id": str(uuid.uuid4())})
         body = self._body()
         if u.path == "/auth/v1/otp":
             st.emails.append(body["email"])
@@ -162,6 +200,25 @@ class Handler(BaseHTTPRequestHandler):
         st.calls.append(("GET", u.path, dict(self.headers)))
         if self.headers.get("apikey") != ANON:
             return self._json({"message": "No API key found in request"}, 401)
+        if u.path.startswith("/storage/v1/object/authenticated/"):
+            user = self._user()
+            if not user:
+                return self._json({"statusCode": "401", "message": "invalid JWT"}, 401)
+            key, err = self._storage_key(u.path[len("/storage/v1/object/authenticated/"):], user)
+            if err is not None:
+                return err
+            with st.lock:
+                hit = st.objects.get(key)
+            if not hit:
+                return self._json({"statusCode": "404", "error": "not_found",
+                                   "message": "Object not found"}, 404)
+            ctype, raw = hit
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+            return None
         if u.path != "/rest/v1/entries":
             return self._json({"message": "not found"}, 404)
         user = self._user()

@@ -8,6 +8,7 @@
  * (`core/vendor.ts`), so they run after the paint and fill in as they can.
  */
 
+import { resolveImage } from "../../core/images.js";
 import { hljs, katex } from "../../core/vendor.js";
 import { h } from "../dom.js";
 
@@ -51,6 +52,21 @@ export function enhance(preview: HTMLElement): Heading[] {
         el.classList.add("is-typeset");
       }
     }).catch(() => { /* the source stays on screen in mono */ });
+
+  /* pictures from the bucket: the renderer left the id, the server has the bytes */
+  for (const img of preview.querySelectorAll<HTMLImageElement>("img[data-cc-image]")) {
+    const id = img.dataset.ccImage ?? "";
+    img.classList.add("is-loading");
+    resolveImage(id).then(
+      (src) => {
+        img.src = src;
+        img.classList.remove("is-loading");
+      },
+      (err: unknown) => {
+        img.classList.replace("is-loading", "is-missing");
+        img.alt = `${img.alt || "image"} (${err instanceof Error ? err.message : "could not load"})`;
+      });
+  }
 
   /* headings: an anchor to hover, and the outline for the side */
   const headings: Heading[] = [];

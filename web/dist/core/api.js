@@ -81,6 +81,13 @@ export const api = {
         delete: true,
         ...input,
     }),
+    /**
+     * A picture for a journal entry. Bytes go up as base64 and come back the
+     * same way: the server keeps them in the account's private bucket, and the
+     * entry refers to them as cc://image/<id>.
+     */
+    uploadImage: (data) => call("/api/image", { data }),
+    image: (id) => call(`/api/image?id=${encodeURIComponent(id)}`),
     /** Ask Claude to summarise everything since the last journal entry. */
     reveal: (path) => call("/api/reveal", { path }),
     /**

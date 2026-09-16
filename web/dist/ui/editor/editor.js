@@ -9,6 +9,7 @@
  * before the tab closes on top of it.
  */
 import { api } from "../../core/api.js";
+import { fileToBase64 } from "../../core/images.js";
 import { composing, h, keep } from "../dom.js";
 import { enhance, outline } from "./enhance.js";
 import { markdownToHtml } from "./markdown.js";
@@ -92,6 +93,73 @@ function build(options) {
         });
         return b;
     };
+    /* -- pictures ---------------------------------------------------------- */
+    /**
+     * A picture goes up before it goes in. The moment you paste, the entry gets
+     * an `![Uploading…]()` where the caret was, so you can keep typing; when the
+     * server answers, that placeholder becomes the real `![name](cc://image/…)`,
+     * wherever it has moved to by then. If the upload fails, the placeholder is
+     * taken back out and the bar says why.
+     */
+    let uploads = 0;
+    const addImage = async (file) => {
+        if (!options.images)
+            return;
+        if (!file.type.startsWith("image/")) {
+            state.textContent = "Only images can be added.";
+            return;
+        }
+        const alt = (file.name || "image").replace(/\.[a-z0-9]+$/i, "") || "image";
+        const mark = `![Uploading ${++uploads}…]()`;
+        const at = area.selectionStart;
+        area.value = area.value.slice(0, at) + mark + area.value.slice(area.selectionEnd);
+        area.setSelectionRange(at + mark.length, at + mark.length);
+        onInput();
+        try {
+            const res = await api.uploadImage(await fileToBase64(file));
+            area.value = area.value.replace(mark, `![${alt}](${res.url})`);
+        }
+        catch (err) {
+            area.value = area.value.replace(mark, "");
+            onInput();
+            state.textContent = err instanceof Error ? err.message : "Could not upload the image";
+            return;
+        }
+        onInput();
+    };
+    const picker = h("input", { type: "file", accept: "image/*", hidden: true });
+    picker.addEventListener("change", () => {
+        for (const f of Array.from(picker.files ?? []))
+            void addImage(f);
+        picker.value = "";
+    });
+    const pickImage = h("button", { class: "md-tool", type: "button",
+        title: "Add an image (or paste / drop one)" }, "img");
+    pickImage.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        picker.click();
+    });
+    area.addEventListener("paste", (e) => {
+        const files = Array.from(e.clipboardData?.files ?? [])
+            .filter((f) => f.type.startsWith("image/"));
+        if (!options.images || !files.length)
+            return;
+        e.preventDefault();
+        for (const f of files)
+            void addImage(f);
+    });
+    area.addEventListener("dragover", (e) => {
+        if (options.images && e.dataTransfer?.types.includes("Files"))
+            e.preventDefault();
+    });
+    area.addEventListener("drop", (e) => {
+        const files = Array.from(e.dataTransfer?.files ?? []);
+        if (!options.images || !files.length)
+            return;
+        e.preventDefault();
+        for (const f of files)
+            void addImage(f);
+    });
     /*
      * The buttons are labelled with the syntax they insert, not with icons. These
      * notes are markdown files that live in the project next to the code, so the
@@ -104,7 +172,7 @@ function build(options) {
     })), h("span", { class: "md-sep" }), tool("$", "Math (inline $..$, block $$ on its own line)", (t, sel) => wrap(t, sel, "$")), tool("[^]", "Footnote", (t, sel) => footnote(t, sel)), tool(":::", "Fold (:::spoiler), or :::info / :::warning / :::danger / :::success", (t, sel) => spoiler(t, sel)), tool("[TOC]", "Table of contents from the headings", (t, sel) => ({
         text: t.slice(0, sel.start) + "\n[TOC]\n" + t.slice(sel.end),
         start: sel.start + 7, end: sel.start + 7,
-    })), h("span", { class: "spacer" }), 
+    })), options.images && h("span", { class: "md-sep" }), options.images && pickImage, h("span", { class: "spacer" }), 
     // One group, so when the toolbar wraps the three modes wrap together.
     h("span", { class: "md-modes" }, modeBtn("write", "Write"), modeBtn("split", "Split"), modeBtn("preview", "Preview")));
     const state = h("span", { class: "editor-state" });
@@ -119,7 +187,7 @@ function build(options) {
     const saveNow = h("button", { class: "btn tiny save", type: "button", hidden: true }, "Save now");
     saveNow.addEventListener("click", () => void commit());
     const bar = h("div", { class: "editor-bar" }, state, h("span", { class: "spacer" }), path, saveNow, remove);
-    const root = h("div", { class: `editor${options.markdown ? " is-markdown" : ""}`, data: { mode: "write" } }, titleBox, tools, h("div", { class: "md-body" }, area, preview, side), bar);
+    const root = h("div", { class: `editor${options.markdown ? " is-markdown" : ""}`, data: { mode: "write" } }, titleBox, tools, h("div", { class: "md-body" }, area, preview, side), bar, picker);
     const dirtyNow = () => area.value !== saved || (!!options.withTitle && titleBox.value !== savedTitle);
     function paint() {
         const blank = isComposer || (!saved && !savedTitle);

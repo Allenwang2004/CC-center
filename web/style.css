@@ -1377,6 +1377,20 @@ button.spend-cell:hover { outline: 2px solid var(--ink-2); outline-offset: -1px;
 .prose th, .prose td { border: 1px solid var(--rule); padding: 5px 9px; text-align: left; }
 .prose th { background: var(--sunk); font-weight: 600; }
 .prose img { max-width: 100%; border-radius: 4px; }
+/* A picture from the bucket, while the server is fetching it, and if it cannot. */
+.prose img.cc-image.is-loading {
+  display: inline-block;
+  min-width: 120px;
+  min-height: 60px;
+  background: var(--sunk);
+}
+.prose img.cc-image.is-missing {
+  display: inline-block;
+  padding: 6px 10px;
+  border: 1px dashed var(--rule-firm);
+  color: var(--removed);
+  font-size: 12px;
+}
 .prose a { color: var(--focus); }
 .prose del { color: var(--ink-3); }
 .prose mark { background: color-mix(in srgb, var(--waiting) 28%, transparent); color: inherit; padding: 0 2px; border-radius: 2px; }
