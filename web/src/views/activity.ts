@@ -43,7 +43,7 @@ export function renderActivity(host: HTMLElement): void {
   if (!items.length) {
     mount(host, spend, h("div", { class: "empty" },
       h("h3", null, "Nothing in this range"),
-      h("p", null, "Pick a wider range in the sidebar.")));
+      h("p", null, "Pick a wider range above.")));
     return;
   }
 

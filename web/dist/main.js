@@ -10,7 +10,7 @@ import { SIGNED_OUT, api, inApp, listen } from "./core/api.js";
 import { $, $$, composing, h, toast } from "./ui/dom.js";
 import { unsavedCount } from "./ui/editor/editor.js";
 import { adopt, store } from "./core/store.js";
-import { bindMachineDrag, fillRangeFields, renderMachines, renderRange, renderRemoteToggle, renderScope, renderStatus, } from "./ui/sidebar.js";
+import { bindMachineDrag, renderMachines, renderRange, renderRemoteToggle, renderScope, renderStatus, } from "./ui/sidebar.js";
 import { renderAgents } from "./views/agents.js";
 import { renderActivity } from "./views/activity.js";
 import { loadClaudeFiles, renderClaude, setClaudeQuery } from "./views/claudemd.js";
@@ -41,7 +41,6 @@ function paintChrome() {
     renderRange(save);
     renderMachines(save, (hosts) => void api.refresh(hosts));
     renderRemoteToggle(save, () => void api.refresh());
-    fillRangeFields();
     renderSettings();
 }
 function fillSelect(id, values, current, all) {
@@ -93,6 +92,10 @@ function showPane(name) {
         if (pane)
             pane.hidden = p !== name;
     }
+    // The window's label only means something where the window applies.
+    const scope = document.getElementById("scope");
+    if (scope)
+        scope.hidden = name !== "sessions" && name !== "activity";
     renderPane();
     // CLAUDE.md files are read from disk, not from the report: fetch them on the way in.
     const claude = paneBody("claude");
@@ -149,10 +152,6 @@ function bind() {
         store.projectFilters.project = e.target.value;
         renderPane();
     });
-    document.getElementById("changed-projects")?.addEventListener("change", (e) => {
-        store.projectFilters.changedOnly = e.target.checked;
-        renderPane();
-    });
     document.getElementById("filter-host")?.addEventListener("change", (e) => {
         store.filters.host = e.target.value;
         renderPane();
@@ -175,8 +174,8 @@ function bind() {
         void api.refresh();
         toast("Collecting");
     });
-    document.getElementById("date")?.addEventListener("change", (e) => void save({ date: e.target.value }));
-    document.getElementById("tz")?.addEventListener("change", (e) => void save({ tz: e.target.value.trim() }));
+    for (const picker of document.querySelectorAll(".range-date"))
+        picker.addEventListener("change", () => void save({ date: picker.value }));
     bindSettings(save);
     document.getElementById("add-host")?.addEventListener("keydown", (e) => {
         const input = e.target;

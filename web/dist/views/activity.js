@@ -20,7 +20,7 @@ export function renderActivity(host) {
     const spend = renderSpend();
     const items = slices();
     if (!items.length) {
-        mount(host, spend, h("div", { class: "empty" }, h("h3", null, "Nothing in this range"), h("p", null, "Pick a wider range in the sidebar.")));
+        mount(host, spend, h("div", { class: "empty" }, h("h3", null, "Nothing in this range"), h("p", null, "Pick a wider range above.")));
         return;
     }
     const totals = items.reduce((acc, it) => {

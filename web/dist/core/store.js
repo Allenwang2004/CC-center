@@ -10,7 +10,7 @@ export const store = {
     hasClaude: false,
     auth: null,
     filters: { query: "", host: "", project: "", changedOnly: false },
-    projectFilters: { query: "", project: "", changedOnly: true },
+    projectFilters: { query: "", project: "" },
     openProjects: new Set(),
     openDays: new Set(),
     openNote: new Map(),

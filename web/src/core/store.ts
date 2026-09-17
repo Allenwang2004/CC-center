@@ -24,7 +24,7 @@ export interface Store {
   /** Who the server is signed in as; the page only exists while it is. */
   auth: Auth | null;
   filters: Filters;
-  projectFilters: { query: string; project: string; changedOnly: boolean };
+  projectFilters: { query: string; project: string };
   openProjects: Set<string>;
   openDays: Set<string>;
   /** Which note each project has open. "" means the blank new-note form. */
@@ -48,7 +48,7 @@ export const store: Store = {
   hasClaude: false,
   auth: null,
   filters: { query: "", host: "", project: "", changedOnly: false },
-  projectFilters: { query: "", project: "", changedOnly: true },
+  projectFilters: { query: "", project: "" },
   openProjects: new Set(),
   openDays: new Set(),
   openNote: new Map(),

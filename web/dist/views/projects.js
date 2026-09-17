@@ -9,7 +9,7 @@
 import { board } from "../ui/board.js";
 import { editor } from "../ui/editor/editor.js";
 import { h, mount, sticky, stickyOpen } from "../ui/dom.js";
-import { basename, clock, count, dayLabel, duration, firstLine, plural, refClock, todayKey, } from "../core/format.js";
+import { ago, basename, clock, count, dayLabel, duration, firstLine, plural, refClock, todayKey, } from "../core/format.js";
 import { changesFor, entriesFor, store } from "../core/store.js";
 function collect() {
     const groups = new Map();
@@ -45,6 +45,9 @@ function collect() {
     for (const perHost of Object.values(store.report?.repo_commits ?? {}))
         for (const [cwd, list] of Object.entries(perHost))
             get(cwd).loose.push(...list);
+    // A project you wrote about is a project, even with no transcript left for it.
+    for (const cwd of Object.keys(store.report?.entries ?? {}))
+        get(cwd);
     for (const g of groups.values()) {
         g.rows.sort((a, b) => (a.turn.ts ?? "").localeCompare(b.turn.ts ?? ""));
         g.notes = entriesFor(g.cwd, "note");
@@ -63,7 +66,6 @@ const matches = (turn, q) => !q ||
  * the two headers have to agree.
  */
 const asked = (rows) => rows.filter((r) => r.turn.kind !== "slash").length;
-const didSomething = (t) => Object.keys(t.files).length > 0 || t.commits.length > 0;
 /* -- your half: notes and the journal ------------------------------------ */
 /**
  * Notes work the way a notes app works: an index down the left, one note open
@@ -240,14 +242,15 @@ export function renderProjects(host) {
     let groups = collect();
     if (f.project)
         groups = groups.filter((g) => basename(g.cwd) === f.project);
-    groups = groups.map((g) => ({
-        ...g,
-        rows: g.rows.filter((r) => matches(r.turn, q) && (!f.changedOnly || didSomething(r.turn))),
-    }));
+    /*
+     * Every project is listed, whatever the range: what you wrote about one
+     * does not stop being there because you have not asked it anything lately.
+     * The range only decides which questions show under it. A search is the one
+     * thing that narrows the list.
+     */
+    groups = groups.map((g) => ({ ...g, rows: g.rows.filter((r) => matches(r.turn, q)) }));
     if (q)
         groups = groups.filter((g) => g.rows.length || g.notes.some((n) => n.body.toLowerCase().includes(q)));
-    else if (f.changedOnly)
-        groups = groups.filter((g) => g.rows.length);
     const totalAsked = groups.reduce((a, g) => a + asked(g.rows), 0);
     const totalCommits = groups.reduce((a, g) => a + g.rows.reduce((b, r) => b + r.turn.commits.length, 0), 0);
     const active = groups.filter((g) => g.rows.length).length;
@@ -284,9 +287,17 @@ function projectBlock(g) {
         : null;
     // A project with work in this range opens itself; the rest stay as you left them.
     const block = sticky(store.openProjects, g.cwd, { class: "project", open: g.rows.length > 0 }, h("summary", { class: "project-head" }, h("h2", null, basename(g.cwd)), g.branch && h("span", { class: "tag" }, g.branch), [...g.hosts].filter((x) => x && x !== store.localHost)
-        .map((x) => h("span", { class: "tag remote" }, x)), g.rows.length
-        ? h("span", { class: "tag" }, `${asked(g.rows)} asked`)
-        : h("span", { class: "tag quiet" }, "quiet in this range"), (added || removed) && h("span", { class: "delta" }, h("span", { class: "plus" }, `+${count(added)}`), h("span", { class: "minus" }, `−${count(removed)}`)), commits ? h("span", { class: "tag" }, plural(commits, "commit")) : null, g.notes.length ? h("span", { class: "tag" }, plural(g.notes.length, "note")) : null, missing && h("span", { class: "tag gone" }, "folder is gone"), h("code", { class: "project-path", title: g.cwd }, g.cwd)), missing ? null : boardShelf(g), missing ? null : noteShelf(g), journalShelf(g, byDay), loose);
+        .map((x) => h("span", { class: "tag remote" }, x)), 
+    // When it was last touched is always there; the counts only when the
+    // range holds some of its work.
+    g.lastActive
+        ? h("span", { class: "tag quiet", title: new Date(g.lastActive).toLocaleString() }, `active ${ago((Date.now() - g.lastActive) / 1000)}`)
+        : null, g.rows.length ? h("span", { class: "tag" }, `${asked(g.rows)} asked`) : null, 
+    // A ternary, not `&&`: a 0 would land in the heading as text.
+    (added || removed) ? h("span", { class: "delta" }, h("span", { class: "plus" }, `+${count(added)}`), h("span", { class: "minus" }, `−${count(removed)}`)) : null, commits ? h("span", { class: "tag" }, plural(commits, "commit")) : null, g.notes.length ? h("span", { class: "tag" }, plural(g.notes.length, "note")) : null, missing && h("span", { class: "tag gone" }, "folder is gone"), h("code", { class: "project-path", title: g.cwd }, g.cwd)), 
+    // What you wrote lives in the account, not in the folder, so a project whose
+    // folder is gone still shows all of it; the tag above says the folder went.
+    boardShelf(g), noteShelf(g), journalShelf(g, byDay), loose);
     return block;
 }
 export function projectNames() {

@@ -70,19 +70,6 @@ SUPABASE_ANON_KEY=...</pre>
     </header>
 
     <section class="group">
-      <h2>Range</h2>
-      <div id="range" class="chips"></div>
-      <label class="field-row">
-        <span>Or one day</span>
-        <input type="date" id="date">
-      </label>
-      <label class="field-row">
-        <span>Time zone</span>
-        <input type="text" id="tz" placeholder="Asia/Taipei">
-      </label>
-    </section>
-
-    <section class="group">
       <h2>Machines
         <button id="remote-toggle" class="chip" type="button">Remote on</button>
       </h2>
@@ -122,7 +109,6 @@ SUPABASE_ANON_KEY=...</pre>
       <div class="toolbar">
         <input type="search" id="search-projects" placeholder="Search questions, files, commits">
         <select id="filter-project"></select>
-        <label class="check"><input type="checkbox" id="changed-projects" checked> Only what changed something</label>
         <span class="spacer"></span>
         <span id="projects-meta" class="muted"></span>
       </div>
@@ -136,10 +122,25 @@ SUPABASE_ANON_KEY=...</pre>
         <select id="filter-session-project"></select>
         <label class="check"><input type="checkbox" id="changed-sessions"> Only sessions that wrote files</label>
       </div>
+      <!--
+        The range: how far back the transcripts are scanned. It only shapes the
+        computed tabs (this one and Activity), so it lives on them, not in the
+        sidebar; what you wrote under Projects is there whatever the range.
+      -->
+      <div class="toolbar range-bar">
+        <span class="muted">Range</span>
+        <div class="range chips"></div>
+        <label class="range-day"><span class="muted">or one day</span><input type="date" class="range-date"></label>
+      </div>
       <div id="pane-sessions-body"></div>
     </section>
 
     <section id="pane-activity" class="pane" role="tabpanel" hidden>
+      <div class="toolbar range-bar">
+        <span class="muted">Range</span>
+        <div class="range chips"></div>
+        <label class="range-day"><span class="muted">or one day</span><input type="date" class="range-date"></label>
+      </div>
       <div id="pane-activity-body"></div>
     </section>
 
@@ -169,6 +170,8 @@ SUPABASE_ANON_KEY=...</pre>
             <p class="hint">A shorter interval for machines where a session moved recently.</p>
             <label class="field-row"><span>Counts as working</span><input type="number" id="live_window" min="60"><i class="unit">s</i></label>
             <p class="hint">A session quiet for longer than this leaves the Agents tab.</p>
+            <label class="field-row"><span>Time zone</span><input type="text" id="tz" placeholder="Asia/Taipei"></label>
+            <p class="hint">Decides which day a session falls on. An IANA name (<code>Asia/Taipei</code>) or an offset (<code>+08:00</code>); this machine's zone by default.</p>
             <label class="check"><input type="checkbox" id="sidechains"> Include subagent transcripts</label>
             <label class="check" title="A `claude -p` run that summarises this tool's own output is not a working session"><input type="checkbox" id="oneshot"> Count one-shot <code>claude -p</code> runs</label>
           </div>

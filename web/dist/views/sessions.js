@@ -64,7 +64,7 @@ export function renderSessions(host) {
     if (badge)
         badge.textContent = items.length ? String(items.length) : "";
     if (!items.length) {
-        mount(host, h("div", { class: "empty" }, h("h3", null, "No sessions in this range"), h("p", null, "Widen the range in the sidebar, or clear the filters.")));
+        mount(host, h("div", { class: "empty" }, h("h3", null, "No sessions in this range"), h("p", null, "Widen the range above, or clear the filters.")));
         return;
     }
     const byDay = new Map();

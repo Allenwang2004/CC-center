@@ -494,6 +494,20 @@ html, body {
 }
 .spacer { flex: 1; }
 
+/* The range, on the tabs it shapes: a row of chips and a one-day picker. */
+.range-bar { margin-top: -8px; gap: 10px; }
+.range-bar > .muted { font-size: 10px; letter-spacing: 0.02em; text-transform: uppercase; }
+.range-day { display: inline-flex; align-items: center; gap: 6px; }
+.range-day input[type="date"] {
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 7px;
+  color: var(--ink);
+  background: var(--raised);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+
 /* -- shared atoms -------------------------------------------------------- */
 
 .muted { color: var(--ink-3); font-size: 11px; }

@@ -231,7 +231,7 @@ for (const name of ["agents", "projects", "sessions", "activity", "claude", "set
  * the sidebar must have let go of them.
  */
 const fields = ["local_poll", "remote_poll", "remote_poll_hot", "live_window",
-                "notify_waiting_after", "notify_tool_after", "browser",
+                "notify_waiting_after", "notify_tool_after", "browser", "tz",
                 "notify_scope", "sidechains", "oneshot", "notify_sound"];
 const filled = fields.filter((id) => {
   const el = d.getElementById(id);
@@ -246,8 +246,30 @@ console.log("account         :", d.getElementById("account-email").textContent, 
             d.getElementById("account-sync").textContent);
 if (d.getElementById("account-email").textContent !== state.auth.email) errors.push("account email not shown");
 console.log("sidebar groups  :", [...d.querySelectorAll(".sidebar .group h2")].map((x) => x.firstChild.textContent.trim()).join(", "));
+if ([...d.querySelectorAll(".sidebar .group h2")].length !== 1) errors.push("the sidebar should hold only the machines now");
 console.log("sidebar machines:", d.querySelectorAll("#machines .machine-row").length);
-console.log("range chips     :", [...d.querySelectorAll("#range .chip")].map((b) => b.textContent).join(" "));
+/*
+ * The range shapes only the computed tabs, so it is drawn on Sessions and on
+ * Activity (both, in step) and nowhere in the sidebar; its label in the top
+ * bar hides on the other tabs.
+ */
+{
+  const bars = [...d.querySelectorAll(".range")].map((r) => r.closest(".pane").id);
+  const chips = [...d.querySelectorAll("#pane-sessions .range .chip")].map((b) => b.textContent);
+  const on = [...d.querySelectorAll(".range .chip.on")].map((b) => b.textContent);
+  console.log("range chips     :", chips.join(" "), "| drawn on:", bars.join(", "),
+              "| on:", on.join(" "), "| in sidebar:", Boolean(d.querySelector(".sidebar .range, .sidebar #tz")));
+  if (bars.sort().join() !== "pane-activity,pane-sessions") errors.push("the range is not on exactly Sessions and Activity");
+  if (chips.length !== 4 || on.length !== 2) errors.push("range chips did not render on both tabs with one chip lit");
+  if (d.querySelector(".sidebar .range, .sidebar #tz")) errors.push("the range or time zone is still in the sidebar");
+  d.querySelector('#tabs button[data-pane="projects"]').dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  const hiddenOnProjects = d.getElementById("scope").hidden;
+  d.querySelector('#tabs button[data-pane="sessions"]').dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  const shownOnSessions = !d.getElementById("scope").hidden;
+  console.log("scope label     :", "hidden on projects:", hiddenOnProjects, "| shown on sessions:", shownOnSessions);
+  if (!hiddenOnProjects || !shownOnSessions) errors.push("the scope label does not follow the range");
+  d.querySelector('#tabs button[data-pane="settings"]').dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+}
 console.log("connection      :", (d.getElementById("connection").textContent || "").trim());
 console.log("scope           :", d.getElementById("scope").textContent);
 console.log("editors         :", d.querySelectorAll("textarea.writing").length);
@@ -263,7 +285,28 @@ await new Promise((r) => setTimeout(r, 200));
  * and everything the tool computed -- the day's changes and the question by
  * question ledger -- belongs to Sessions.
  */
-console.log("\nprojects: turns      :", d.querySelectorAll("#pane-projects-body .entry:not(.loose)").length);
+/*
+ * Every project the machine has ever run Claude in is listed, whatever the
+ * range: the sessions in the payload cover only its window, the project list
+ * covers all time, and the two counts have to agree with the latter. No
+ * project may be dropped for being quiet, and each one says when it was
+ * last touched.
+ */
+{
+  const listed = d.querySelectorAll("#pane-projects-body details.project").length;
+  const known = new Set([...(report.projects ?? []).map((p) => p.cwd), ...Object.keys(report.entries ?? {})]).size;
+  const quiet = [...d.querySelectorAll("#pane-projects-body details.project")]
+    .filter((b) => !b.querySelector(".entry") && !/asked/.test(b.querySelector("summary").textContent)).length;
+  const dated = d.querySelectorAll("#pane-projects-body .project-head .tag.quiet").length;
+  console.log("\nprojects listed :", listed, "| known to the server:", known, "| quiet in range:", quiet,
+              "| with a last-active tag:", dated, "| checkbox gone:", !d.getElementById("changed-projects"));
+  if (listed !== known) errors.push("the projects tab does not list every project");
+  const stray = [...d.querySelectorAll("#pane-projects-body .project-head")]
+    .filter((h) => [...h.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim() === "0")).length;
+  if (stray) errors.push(`${stray} project headings carry a stray 0`);
+  if (d.getElementById("changed-projects")) errors.push("the range-bound checkbox is still there");
+}
+console.log("projects: turns      :", d.querySelectorAll("#pane-projects-body .entry:not(.loose)").length);
 console.log("projects: summaries  :", d.querySelectorAll("#pane-projects-body .summary").length);
 const sessTab = d.querySelector('#tabs button[data-pane="sessions"]');
 sessTab.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));

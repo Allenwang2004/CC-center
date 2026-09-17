@@ -1,8 +1,8 @@
 /**
  * The knobs you set once and leave: how often to collect, when to be told,
  * what the report prints, and the server itself. They used to live down the
- * sidebar; the sidebar now keeps only what changes during a day (the range and
- * the machines), and everything else is here.
+ * sidebar; the sidebar now keeps only the machines, and everything else is
+ * here (the range, which changes during a day, sits on the tabs it shapes).
  *
  * The fields are static HTML in index.html. This module only fills them from
  * the store and writes a change back, so a control can be moved on the page
@@ -18,7 +18,7 @@ type Save = (patch: Partial<Settings>) => Promise<void>;
 
 const NUMBERS = ["local_poll", "remote_poll", "remote_poll_hot", "live_window",
                  "notify_waiting_after", "notify_tool_after"] as const;
-const TEXTS = ["browser", "journal_at", "journal_model"] as const;
+const TEXTS = ["browser", "journal_at", "journal_model", "tz"] as const;
 const FLAGS = ["sidechains", "oneshot", "notify_sound", "journal_auto"] as const;
 
 export function renderSettings(): void {

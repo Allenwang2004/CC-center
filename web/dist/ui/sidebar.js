@@ -1,6 +1,9 @@
-/** The sidebar: the range you are looking at and the machines you are asking. */
+/**
+ * The sidebar: the machines you are asking. The range used to sit here too;
+ * it is drawn onto the two tabs it actually shapes now (see renderRange).
+ */
 import { api } from "../core/api.js";
-import { $, h, mount } from "./dom.js";
+import { h, mount } from "./dom.js";
 import { ago, plural } from "../core/format.js";
 import { store } from "../core/store.js";
 export function renderMachines(save, refresh) {
@@ -35,19 +38,22 @@ export function renderMachines(save, refresh) {
     void localState;
     void refresh;
 }
+/**
+ * The range is drawn wherever a `.range` container asks for it -- the Sessions
+ * and Activity tabs each carry one -- and every `.range-date` picker shows the
+ * same one-day choice, so the two tabs never disagree about the window.
+ */
 export function renderRange(save) {
-    const host = document.getElementById("range");
-    if (!host)
-        return;
     const current = store.settings.date ? -1 : store.settings.days;
-    mount(host, [1, 3, 7, 30].map((days) => {
-        const btn = h("button", { class: `chip ${current === days ? "on" : ""}`, type: "button" }, days === 1 ? "Today" : `${days} days`);
-        btn.addEventListener("click", () => void save({ days, date: "" }));
-        return btn;
-    }));
-    const picker = $("#date");
-    if (picker && picker !== document.activeElement)
-        picker.value = store.settings.date ?? "";
+    for (const host of document.querySelectorAll(".range"))
+        mount(host, [1, 3, 7, 30].map((days) => {
+            const btn = h("button", { class: `chip ${current === days ? "on" : ""}`, type: "button" }, days === 1 ? "Today" : `${days} days`);
+            btn.addEventListener("click", () => void save({ days, date: "" }));
+            return btn;
+        }));
+    for (const picker of document.querySelectorAll(".range-date"))
+        if (picker !== document.activeElement)
+            picker.value = store.settings.date ?? "";
 }
 export function renderStatus(connected) {
     const el = document.getElementById("connection");
@@ -87,12 +93,6 @@ export function renderRemoteToggle(save, refresh) {
         if (!on)
             refresh();
     };
-}
-/** The time zone lives with the range because it decides which day a session falls on. */
-export function fillRangeFields() {
-    const tz = document.getElementById("tz");
-    if (tz && tz !== document.activeElement)
-        tz.value = store.settings.tz;
 }
 /** Machines can be reordered by dragging the grip; the order is written to disk. */
 export function bindMachineDrag() {
