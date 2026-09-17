@@ -56,7 +56,7 @@ function build(options) {
     const expand = h("button", { class: "linkish", type: "button", title: "Fill the window" }, "Expand");
     const canvas = h("div", { class: "board-canvas" });
     const loading = h("p", { class: "board-loading muted" }, "Loading the canvas…");
-    const root = sticky(store.openBoards, options.cwd, { class: "shelf mindmap board" }, h("summary", { class: "board-head" }, h("h4", null, "Mindmap", when)), h("div", { class: "editor-bar board-bar" }, state, h("span", { class: "spacer" }), saveNow, expand), h("div", { class: "board-host" }, loading, canvas));
+    const root = sticky(store.openBoards, options.cwd, { class: "shelf fold mindmap board" }, h("summary", null, h("h4", null, "Mindmap", when)), h("div", { class: "editor-bar board-bar" }, state, h("span", { class: "spacer" }), saveNow, expand), h("div", { class: "board-host" }, loading, canvas));
     const look = (appState) => `${String(appState.viewBackgroundColor ?? "")}|${String(appState.gridSize ?? "")}`;
     function paint() {
         when.textContent = updatedAt

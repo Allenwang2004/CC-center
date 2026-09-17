@@ -925,7 +925,7 @@ html, body {
 /* -- your half: notes and journal ---------------------------------------- */
 
 .shelf { margin: 12px 0 16px; }
-.shelf > h4 {
+.shelf > h4, .shelf > summary > h4 {
   margin: 0 0 8px;
   font-size: 11px;
   font-weight: 600;
@@ -934,10 +934,27 @@ html, body {
   align-items: baseline;
   gap: 8px;
 }
-.shelf > h4 .muted { font-weight: 400; }
-.shelf > h4 .spacer { flex: 1; }
+.shelf h4 .muted { font-weight: 400; }
+.shelf h4 .spacer { flex: 1; }
 /* Drafting is a real wait, so the button says so rather than sitting there. */
-.shelf > h4 .linkish:disabled { cursor: progress; color: var(--waiting); }
+.shelf h4 .linkish:disabled { cursor: progress; color: var(--waiting); }
+
+/*
+ * Every shelf folds: the heading is the summary, with a small triangle that
+ * turns when it is open. Folded, a shelf is one line; the notes and the
+ * journal start open, the mind map starts closed.
+ */
+.fold > summary { cursor: pointer; list-style: none; }
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary h4::before {
+  content: "\25B8";
+  font-size: 10px;
+  color: var(--ink-3);
+  transition: transform 0.12s ease;
+}
+.fold[open] > summary h4::before { transform: rotate(90deg); }
+.fold:not([open]) > summary h4 { margin-bottom: 0; }
+.fold > summary:hover h4 { color: var(--ink-2); }
 
 /*
  * The editor runs the full width of the project column, so its right edge lands
@@ -1102,16 +1119,7 @@ html, body {
  * only thing sized here.
  */
 .board { margin-top: 6px; }
-.board > summary { cursor: pointer; list-style: none; }
-.board > summary::-webkit-details-marker { display: none; }
-.board > summary h4 { display: flex; align-items: baseline; gap: 8px; margin: 0; }
-.board > summary h4::before {
-  content: "\25B8";
-  font-size: 10px;
-  color: var(--ink-3);
-  transition: transform 0.12s ease;
-}
-.board[open] > summary h4::before { transform: rotate(90deg); }
+.board > summary h4 { margin-bottom: 0; }
 .board-bar { display: none; padding: 4px 0 6px; }
 .board[open] .board-bar { display: flex; }
 .board-host {

@@ -485,6 +485,33 @@ console.log("journal save    :", JSON.stringify(journalSaves));
   if (!mounted && !note.startsWith("Could not load the canvas")) errors.push("opening the mind map neither mounted nor explained");
 }
 
+/*
+ * Notes and the journal fold like the mind map, but start open; a shelf you
+ * folded stays folded when the pane is redrawn (a background scan does that),
+ * and the others stay open.
+ */
+{
+  const block = d.querySelector("details.project");
+  const notes = block.querySelector("details.notes");
+  const journal = block.querySelector("details.journal");
+  console.log("\nshelves fold    :", "notes open:", notes?.open, "| journal open:", journal?.open,
+              "| summaries:", Boolean(notes?.querySelector(":scope > summary h4")) && Boolean(journal?.querySelector(":scope > summary h4")));
+  if (!notes?.open || !journal?.open) errors.push("notes and journal must start open");
+  notes.open = false;
+  notes.dispatchEvent(new window.Event("toggle"));
+  // Redraw the pane the way a scan would: leave, come back.
+  d.querySelector('#tabs button[data-pane="sessions"]').dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 150));
+  d.querySelector('#tabs button[data-pane="projects"]').dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 250));
+  const again = d.querySelector("details.project");
+  const kept = !again.querySelector("details.notes").open && again.querySelector("details.journal").open;
+  console.log("shelves remember:", kept ? "folded notes stayed folded, journal stayed open" : "LOST");
+  if (!kept) errors.push("a folded shelf did not stay folded across a redraw");
+  again.querySelector("details.notes").open = true;
+  again.querySelector("details.notes").dispatchEvent(new window.Event("toggle"));
+}
+
 console.log("\nerrors          :", errors.length ? errors : "none");
 
 process.exit(errors.length ? 1 : 0);

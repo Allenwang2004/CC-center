@@ -33,6 +33,8 @@ export interface Store {
   openJournal: Map<string, string>;
   /** Projects whose mind map is unfolded (the canvas only mounts when it is). */
   openBoards: Set<string>;
+  /** Notes and journal shelves you folded, as "notes:<cwd>" / "journal:<cwd>". */
+  closedShelves: Set<string>;
 }
 
 export const store: Store = {
@@ -52,6 +54,7 @@ export const store: Store = {
   openNote: new Map(),
   openJournal: new Map(),
   openBoards: new Set(),
+  closedShelves: new Set(),
 };
 
 export function adopt(state: AppState): void {

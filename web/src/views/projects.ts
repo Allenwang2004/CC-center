@@ -9,7 +9,7 @@
 
 import { board } from "../ui/board.js";
 import { editor } from "../ui/editor/editor.js";
-import { h, mount, sticky } from "../ui/dom.js";
+import { h, mount, sticky, stickyOpen } from "../ui/dom.js";
 import {
   basename, clock, count, dayLabel, duration, firstLine, plural,
   refClock, todayKey,
@@ -157,9 +157,11 @@ function noteShelf(g: Group): HTMLElement {
     h("span", { class: "note-item-title" }, "+ New note"));
   fresh.addEventListener("click", () => select("", true));
 
-  return h("section", { class: "shelf" },
-    h("h4", null, "Notes",
-      h("span", { class: "muted" }, `${notes.length} kept`)),
+  // A fold like the mind map's, but open until you close it.
+  return stickyOpen(store.closedShelves, `notes:${g.cwd}`, { class: "shelf fold notes" },
+    h("summary", null,
+      h("h4", null, "Notes",
+        h("span", { class: "muted" }, `${notes.length} kept`))),
     h("div", { class: "note-pane" },
       h("div", { class: "note-index" }, fresh, index),
       h("div", { class: "note-open" }, ed.el)));
@@ -247,9 +249,10 @@ function journalShelf(g: Group, byDay: Map<string, Row[]>): HTMLElement {
         ? ` · saved ${clock(saved.updated_at)} · ${saved.updated_at.slice(0, 10)}`
         : " · not written yet"));
 
-  return h("section", { class: "shelf journal" },
-    h("h4", null, "Journal",
-      h("span", { class: "muted" }, `${plural(written.size, "day")} written`)),
+  return stickyOpen(store.closedShelves, `journal:${g.cwd}`, { class: "shelf fold journal" },
+    h("summary", null,
+      h("h4", null, "Journal",
+        h("span", { class: "muted" }, `${plural(written.size, "day")} written`))),
     h("div", { class: "note-pane journal-pane" },
       h("div", { class: "note-index journal-index" }, index),
       h("div", { class: "note-open journal-open" }, head, journalBox(g, current))));

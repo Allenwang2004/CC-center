@@ -80,8 +80,8 @@ function build(options: BoardOptions): Board {
   const expand = h("button", { class: "linkish", type: "button", title: "Fill the window" }, "Expand");
   const canvas = h("div", { class: "board-canvas" });
   const loading = h("p", { class: "board-loading muted" }, "Loading the canvas…");
-  const root = sticky(store.openBoards, options.cwd, { class: "shelf mindmap board" },
-    h("summary", { class: "board-head" },
+  const root = sticky(store.openBoards, options.cwd, { class: "shelf fold mindmap board" },
+    h("summary", null,
       h("h4", null, "Mindmap", when)),
     h("div", { class: "editor-bar board-bar" },
       state, h("span", { class: "spacer" }), saveNow, expand),

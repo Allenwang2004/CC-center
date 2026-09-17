@@ -91,6 +91,21 @@ export function sticky(open, key, attrs, ...children) {
     });
     return box;
 }
+/**
+ * The same, for a <details> that starts open: the set holds the keys you
+ * closed, so a shelf you folded stays folded through a redraw and everything
+ * else stays open, without the caller having to seed the set.
+ */
+export function stickyOpen(closed, key, attrs, ...children) {
+    const box = h("details", { ...attrs, open: !closed.has(key) }, ...children);
+    box.addEventListener("toggle", () => {
+        if (box.open)
+            closed.delete(key);
+        else
+            closed.add(key);
+    });
+    return box;
+}
 export const frag = (...children) => {
     const f = document.createDocumentFragment();
     for (const c of children)

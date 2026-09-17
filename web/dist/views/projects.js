@@ -8,7 +8,7 @@
  */
 import { board } from "../ui/board.js";
 import { editor } from "../ui/editor/editor.js";
-import { h, mount, sticky } from "../ui/dom.js";
+import { h, mount, sticky, stickyOpen } from "../ui/dom.js";
 import { basename, clock, count, dayLabel, duration, firstLine, plural, refClock, todayKey, } from "../core/format.js";
 import { changesFor, entriesFor, store } from "../core/store.js";
 function collect() {
@@ -119,7 +119,8 @@ function noteShelf(g) {
     });
     const fresh = h("button", { class: `note-item note-item-new${composing ? " is-on" : ""}`, type: "button" }, h("span", { class: "note-item-title" }, "+ New note"));
     fresh.addEventListener("click", () => select("", true));
-    return h("section", { class: "shelf" }, h("h4", null, "Notes", h("span", { class: "muted" }, `${notes.length} kept`)), h("div", { class: "note-pane" }, h("div", { class: "note-index" }, fresh, index), h("div", { class: "note-open" }, ed.el)));
+    // A fold like the mind map's, but open until you close it.
+    return stickyOpen(store.closedShelves, `notes:${g.cwd}`, { class: "shelf fold notes" }, h("summary", null, h("h4", null, "Notes", h("span", { class: "muted" }, `${notes.length} kept`))), h("div", { class: "note-pane" }, h("div", { class: "note-index" }, fresh, index), h("div", { class: "note-open" }, ed.el)));
 }
 /**
  * The journal is the other half of the record. Every morning the watcher has
@@ -185,7 +186,7 @@ function journalShelf(g, byDay) {
     const head = h("header", { class: "day-head" }, h("h3", null, dayLabel(current)), current === today && h("span", { class: "tag now" }, "today"), h("span", { class: "muted" }, asked(rows) ? `${asked(rows)} asked` : "nothing asked", ch && ch.active ? ` · ${duration(ch.active)}` : "", saved?.updated_at
         ? ` · saved ${clock(saved.updated_at)} · ${saved.updated_at.slice(0, 10)}`
         : " · not written yet"));
-    return h("section", { class: "shelf journal" }, h("h4", null, "Journal", h("span", { class: "muted" }, `${plural(written.size, "day")} written`)), h("div", { class: "note-pane journal-pane" }, h("div", { class: "note-index journal-index" }, index), h("div", { class: "note-open journal-open" }, head, journalBox(g, current))));
+    return stickyOpen(store.closedShelves, `journal:${g.cwd}`, { class: "shelf fold journal" }, h("summary", null, h("h4", null, "Journal", h("span", { class: "muted" }, `${plural(written.size, "day")} written`))), h("div", { class: "note-pane journal-pane" }, h("div", { class: "note-index journal-index" }, index), h("div", { class: "note-open journal-open" }, head, journalBox(g, current))));
 }
 /**
  * The mind map sits above the words: it is the high-level thinking the notes
