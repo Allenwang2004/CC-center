@@ -11,7 +11,7 @@ import { api } from "../core/api.js";
 import { basename, plural } from "../core/format.js";
 import { store } from "../core/store.js";
 import { h, mount } from "../ui/dom.js";
-import { editor } from "../ui/editor/editor.js";
+import { deferWhileWriting, editor } from "../ui/editor/editor.js";
 let files = null;
 let loading = false;
 let error = null;
@@ -86,6 +86,10 @@ function card(f) {
     return h("article", { class: `claude-file${open ? " is-open" : ""}`, data: { key } }, head, body);
 }
 export function renderClaude(host) {
+    // A scan pushes an update every few seconds while Claude Code is busy; the
+    // pane must not be rebuilt around a file you are in the middle of editing.
+    if (deferWhileWriting(host, renderClaude))
+        return;
     const meta = document.getElementById("claude-meta");
     if (loading && !files) {
         mount(host, h("div", { class: "empty" }, h("h3", null, "Reading…"), h("p", null, "Local files are instant; each remote machine is one ssh round trip.")));

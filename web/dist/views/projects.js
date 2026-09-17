@@ -7,7 +7,7 @@
  * two kinds of truth apart: a project is what you have to say about it.
  */
 import { board } from "../ui/board.js";
-import { editor } from "../ui/editor/editor.js";
+import { deferWhileWriting, editor } from "../ui/editor/editor.js";
 import { h, mount, sticky, stickyOpen } from "../ui/dom.js";
 import { ago, basename, clock, count, dayLabel, duration, firstLine, plural, refClock, todayKey, } from "../core/format.js";
 import { changesFor, entriesFor, store } from "../core/store.js";
@@ -209,34 +209,10 @@ function boardShelf(g) {
     return b.el;
 }
 /* -- the pane ------------------------------------------------------------ */
-/**
- * Rebuilding the pane detaches every node in it, and detaching a focused
- * textarea blurs it -- so a background refresh would throw you out of a note
- * mid-sentence. If you are writing, the redraw waits until you look away.
- */
-let deferred = null;
-function writingHere(host) {
-    const active = document.activeElement;
-    return active instanceof HTMLTextAreaElement
-        && active.classList.contains("writing")
-        && host.contains(active)
-        ? active
-        : null;
-}
 export function renderProjects(host) {
-    const writing = writingHere(host);
-    if (writing) {
-        if (!deferred)
-            writing.addEventListener("blur", () => {
-                const pending = deferred;
-                deferred = null;
-                if (pending)
-                    renderProjects(pending);
-            }, { once: true });
-        deferred = host;
+    // Never redraw under someone's fingers: see deferWhileWriting.
+    if (deferWhileWriting(host, renderProjects))
         return;
-    }
-    deferred = null;
     const f = store.projectFilters;
     const q = f.query.trim().toLowerCase();
     let groups = collect();

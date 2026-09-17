@@ -226,6 +226,37 @@ for (const name of ["agents", "projects", "sessions", "activity", "claude", "set
 }
 
 /*
+ * The pane must not be rebuilt while you are typing in it: a redraw detaches
+ * the focused field, which blurs it and cuts an IME composition short. Both
+ * panes that hold editors are checked the same way: focus a field, ask for a
+ * redraw (what an update from the server does), and the field must still be
+ * the active element with its text; looking away is what lets the redraw in.
+ * The fields also switch off the system's autocorrection, which WebKit would
+ * otherwise run over markdown.
+ */
+for (const [pane, sel] of [["claude", "#pane-claude-body .editor textarea.writing"],
+                           ["projects", "#pane-projects-body .note-open textarea.writing"]]) {
+  d.querySelector(`#tabs button[data-pane="${pane}"]`).dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 300));
+  const field = d.querySelector(sel);
+  field.focus();
+  field.value += " typed while an update arrives";
+  field.dispatchEvent(new window.Event("input", { bubbles: true }));
+  // The same call an `update` event makes: the pane asked to redraw itself.
+  d.querySelector(`#tabs button[data-pane="${pane}"]`).dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 200));
+  const kept = d.activeElement === field && field.isConnected && field.value.endsWith("an update arrives");
+  field.blur();
+  await new Promise((r) => setTimeout(r, 200));
+  const redrawn = d.querySelector(sel) !== null;
+  const attrs = ["autocorrect", "autocapitalize", "autocomplete"].every((a) => field.getAttribute(a) === "off");
+  console.log(`typing guard    : ${pane.padEnd(8)} | kept focus and text through a redraw: ${kept} | redrew after blur: ${redrawn} | autocorrect off: ${attrs}`);
+  if (!kept) errors.push(`${pane}: a redraw took the focus while typing`);
+  if (!attrs) errors.push(`${pane}: the editor does not switch autocorrection off`);
+  field.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+}
+
+/*
  * Settings live on their own pane now, found by id rather than by where they
  * sit -- so every field has to be present and carry the server's value, and
  * the sidebar must have let go of them.

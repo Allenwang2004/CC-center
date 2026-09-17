@@ -34,6 +34,34 @@ export const setUnsaved = (key: string, unsaved: boolean): void => {
   else dirtyEditors.delete(key);
 };
 
+/**
+ * Rebuilding a pane detaches every node in it, and detaching a focused field
+ * blurs it: a background refresh would throw you out of a note mid-sentence
+ * and, worse, cut an input method's composition short -- the candidate window
+ * is left hanging with nothing behind it. So a pane that holds the field you
+ * are writing in does not redraw until you look away. Returns true when the
+ * redraw was put off; the caller then simply returns.
+ */
+const waiting = new Map<(host: HTMLElement) => void, HTMLElement>();
+
+export function deferWhileWriting(host: HTMLElement, render: (host: HTMLElement) => void): boolean {
+  const active = document.activeElement;
+  const writing = active instanceof HTMLElement
+    && active.classList.contains("writing") && host.contains(active) ? active : null;
+  if (!writing) {
+    waiting.delete(render);
+    return false;
+  }
+  if (!waiting.has(render))
+    writing.addEventListener("blur", () => {
+      const pending = waiting.get(render);
+      waiting.delete(render);
+      if (pending) render(pending);
+    }, { once: true });
+  waiting.set(render, host);
+  return true;
+}
+
 export interface EditorOptions {
   key: string;
   kind: Kind;
@@ -96,11 +124,20 @@ function build(options: EditorOptions): Editor {
   let status: Status = "clean";
   let inFlight = false;
 
+  /*
+   * spellcheck alone is not enough on macOS: WebKit still runs the system's
+   * autocorrection and text replacement in a field, which pops suggestion
+   * bubbles under markdown and file paths and fights the editor's own edits.
+   * These three attributes are what switch that off.
+   */
   const area = h("textarea", {
     class: "writing",
     rows: options.rows,
     placeholder: options.placeholder,
     spellcheck: false,
+    autocorrect: "off",
+    autocapitalize: "off",
+    autocomplete: "off",
   });
   area.value = saved;
 
@@ -109,9 +146,19 @@ function build(options: EditorOptions): Editor {
     type: "text",
     placeholder: options.titlePlaceholder ?? "Title",
     spellcheck: false,
+    autocorrect: "off",
+    autocapitalize: "off",
+    autocomplete: "off",
     hidden: !options.withTitle,
   });
   titleBox.value = savedTitle;
+
+  // While an input method is composing, nothing here may touch the field.
+  let inComposition = false;
+  for (const field of [area, titleBox]) {
+    field.addEventListener("compositionstart", () => { inComposition = true; });
+    field.addEventListener("compositionend", () => { inComposition = false; });
+  }
 
   /* -- markdown surface -------------------------------------------------- */
 
@@ -461,7 +508,7 @@ function build(options: EditorOptions): Editor {
     el: root,
     sync(savedText: string, incomingTitle?: string) {
       const title = incomingTitle ?? savedTitle;
-      if (status === "dirty" || status === "saving") return;
+      if (status === "dirty" || status === "saving" || inComposition) return;
       if (document.activeElement === area || document.activeElement === titleBox) return;
       if (savedText === saved && title === savedTitle) return;
       saved = savedText;
@@ -476,6 +523,7 @@ function build(options: EditorOptions): Editor {
       (options.withTitle ? titleBox : area).focus();
     },
     replace(text: string) {
+      if (inComposition) return;
       area.value = text;
       area.setSelectionRange(0, 0);
       onInput();

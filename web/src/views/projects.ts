@@ -8,7 +8,7 @@
  */
 
 import { board } from "../ui/board.js";
-import { editor } from "../ui/editor/editor.js";
+import { deferWhileWriting, editor } from "../ui/editor/editor.js";
 import { h, mount, sticky, stickyOpen } from "../ui/dom.js";
 import {
   ago, basename, clock, count, dayLabel, duration, firstLine, plural,
@@ -278,35 +278,9 @@ function boardShelf(g: Group): HTMLElement {
 
 /* -- the pane ------------------------------------------------------------ */
 
-/**
- * Rebuilding the pane detaches every node in it, and detaching a focused
- * textarea blurs it -- so a background refresh would throw you out of a note
- * mid-sentence. If you are writing, the redraw waits until you look away.
- */
-let deferred: HTMLElement | null = null;
-
-function writingHere(host: HTMLElement): HTMLTextAreaElement | null {
-  const active = document.activeElement;
-  return active instanceof HTMLTextAreaElement
-    && active.classList.contains("writing")
-    && host.contains(active)
-    ? active
-    : null;
-}
-
 export function renderProjects(host: HTMLElement): void {
-  const writing = writingHere(host);
-  if (writing) {
-    if (!deferred)
-      writing.addEventListener("blur", () => {
-        const pending = deferred;
-        deferred = null;
-        if (pending) renderProjects(pending);
-      }, { once: true });
-    deferred = host;
-    return;
-  }
-  deferred = null;
+  // Never redraw under someone's fingers: see deferWhileWriting.
+  if (deferWhileWriting(host, renderProjects)) return;
 
   const f = store.projectFilters;
   const q = f.query.trim().toLowerCase();

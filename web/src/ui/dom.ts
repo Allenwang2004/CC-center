@@ -29,6 +29,8 @@ export interface Attrs {
   open?: boolean;
   spellcheck?: boolean;
   autocomplete?: string;
+  autocorrect?: string;
+  autocapitalize?: string;
   accept?: string;
   data?: Record<string, string | undefined>;
   aria?: Record<string, string | undefined>;

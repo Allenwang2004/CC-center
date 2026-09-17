@@ -24,6 +24,33 @@ export const setUnsaved = (key, unsaved) => {
     else
         dirtyEditors.delete(key);
 };
+/**
+ * Rebuilding a pane detaches every node in it, and detaching a focused field
+ * blurs it: a background refresh would throw you out of a note mid-sentence
+ * and, worse, cut an input method's composition short -- the candidate window
+ * is left hanging with nothing behind it. So a pane that holds the field you
+ * are writing in does not redraw until you look away. Returns true when the
+ * redraw was put off; the caller then simply returns.
+ */
+const waiting = new Map();
+export function deferWhileWriting(host, render) {
+    const active = document.activeElement;
+    const writing = active instanceof HTMLElement
+        && active.classList.contains("writing") && host.contains(active) ? active : null;
+    if (!writing) {
+        waiting.delete(render);
+        return false;
+    }
+    if (!waiting.has(render))
+        writing.addEventListener("blur", () => {
+            const pending = waiting.get(render);
+            waiting.delete(render);
+            if (pending)
+                render(pending);
+        }, { once: true });
+    waiting.set(render, host);
+    return true;
+}
 export function editor(options) {
     const el = keep(options.key, () => {
         const made = build(options);
@@ -39,11 +66,20 @@ function build(options) {
     let savedTitle = options.savedTitle ?? "";
     let status = "clean";
     let inFlight = false;
+    /*
+     * spellcheck alone is not enough on macOS: WebKit still runs the system's
+     * autocorrection and text replacement in a field, which pops suggestion
+     * bubbles under markdown and file paths and fights the editor's own edits.
+     * These three attributes are what switch that off.
+     */
     const area = h("textarea", {
         class: "writing",
         rows: options.rows,
         placeholder: options.placeholder,
         spellcheck: false,
+        autocorrect: "off",
+        autocapitalize: "off",
+        autocomplete: "off",
     });
     area.value = saved;
     const titleBox = h("input", {
@@ -51,9 +87,18 @@ function build(options) {
         type: "text",
         placeholder: options.titlePlaceholder ?? "Title",
         spellcheck: false,
+        autocorrect: "off",
+        autocapitalize: "off",
+        autocomplete: "off",
         hidden: !options.withTitle,
     });
     titleBox.value = savedTitle;
+    // While an input method is composing, nothing here may touch the field.
+    let inComposition = false;
+    for (const field of [area, titleBox]) {
+        field.addEventListener("compositionstart", () => { inComposition = true; });
+        field.addEventListener("compositionend", () => { inComposition = false; });
+    }
     let mode = "write";
     const preview = h("div", { class: "md-preview prose" });
     let side = h("nav", { class: "md-outline", hidden: true });
@@ -360,7 +405,7 @@ function build(options) {
         el: root,
         sync(savedText, incomingTitle) {
             const title = incomingTitle ?? savedTitle;
-            if (status === "dirty" || status === "saving")
+            if (status === "dirty" || status === "saving" || inComposition)
                 return;
             if (document.activeElement === area || document.activeElement === titleBox)
                 return;
@@ -378,6 +423,8 @@ function build(options) {
             (options.withTitle ? titleBox : area).focus();
         },
         replace(text) {
+            if (inComposition)
+                return;
             area.value = text;
             area.setSelectionRange(0, 0);
             onInput();
